@@ -1,6 +1,6 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
-using System.Data;
+using System.Data;                    // <-- ეს დაამატე! (აუცილებელია CommandType-სთვის)
 using AssetManagementApi.Models.DTO;
 
 namespace AssetManagementApi.Repositories;
@@ -14,16 +14,16 @@ public class AssetRepository
         _connectionString = configuration.GetConnectionString("DefaultConnection")!;
     }
 
-    private SqlConnection CreateConnection() => new SqlConnection(_connectionString); // SqlConnection-ად შეცვლილი
+    private SqlConnection CreateConnection() => new(_connectionString);
 
-    // GET: api/assets
+    // GET ALL
     public async Task<IEnumerable<AssetDto>> GetAllAsync()
     {
         const string sql = @"
             SELECT a.*, 
                    c.Name AS CategoryName,
                    d.Name AS DepartmentName,
-                   l.RoomNumber + ' (' + b.Name + ')' AS LocationName,
+                   ISNULL(l.RoomNumber,'') + ' (' + ISNULL(b.Name,'') + ')' AS LocationName,
                    e.FullName AS ResponsiblePersonName,
                    s.StatusName,
                    m.MethodName AS DepreciationMethodName
@@ -37,19 +37,18 @@ public class AssetRepository
             LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
             ORDER BY a.CreatedAt DESC";
 
-        using var conn = CreateConnection();
-        await conn.OpenAsync(); // ახლა მუშაობს SqlConnection-ზე
+        await using var conn = CreateConnection();
         return await conn.QueryAsync<AssetDto>(sql);
     }
 
-    // GET: api/assets/{id}
+    // GET BY ID
     public async Task<AssetDto?> GetByIdAsync(int id)
     {
         const string sql = @"
             SELECT a.*, 
                    c.Name AS CategoryName,
                    d.Name AS DepartmentName,
-                   l.RoomNumber + ' (' + b.Name + ')' AS LocationName,
+                   ISNULL(l.RoomNumber,'') + ' (' + ISNULL(b.Name,'') + ')' AS LocationName,
                    e.FullName AS ResponsiblePersonName,
                    s.StatusName,
                    m.MethodName AS DepreciationMethodName
@@ -63,60 +62,119 @@ public class AssetRepository
             LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
             WHERE a.Id = @Id";
 
-        using var conn = CreateConnection();
-        await conn.OpenAsync();
+        await using var conn = CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<AssetDto>(sql, new { Id = id });
     }
 
-    // POST: api/assets (usp_Asset_Insert_V3)
+    // CREATE – სწორი ID-ის დაბრუნებით
     public async Task<int> CreateAsync(AssetCreateDto dto, string createdBy)
     {
-        const string sql = "usp_Asset_Insert_V3";
-        using var conn = CreateConnection();
-        await conn.OpenAsync();
+        await using var conn = CreateConnection();
 
-        var parameters = new DynamicParameters(dto);
-        parameters.Add("@CreatedBy", createdBy);
+        var p = new DynamicParameters();
+        p.Add("@AssetName", dto.AssetName);
+        p.Add("@Description", dto.Description);
+        p.Add("@SearchDescription", dto.SearchDescription);
+        p.Add("@Manufacturer", dto.Manufacturer);
+        p.Add("@ManufactureDate", dto.ManufactureDate);
+        p.Add("@Barcode", dto.Barcode);
+        p.Add("@SerialNumber", dto.SerialNumber);
+        p.Add("@InventoryNumber", dto.InventoryNumber);
+        p.Add("@ScannedBarcodeResponse", dto.ScannedBarcodeResponse);
+        p.Add("@CategoryId", dto.CategoryId);
+        p.Add("@DepartmentId", dto.DepartmentId);
+        p.Add("@LocationId", dto.LocationId);
+        p.Add("@AssetStatusId", dto.AssetStatusId);
+        p.Add("@ResponsiblePersonId", dto.ResponsiblePersonId);
+        p.Add("@PurchaseDate", dto.PurchaseDate);
+        p.Add("@PurchaseValue", dto.PurchaseValue);
+        p.Add("@SalvageValue", dto.SalvageValue);
+        p.Add("@UsefulLifeMonths", dto.UsefulLifeMonths);
+        p.Add("@DepreciationMethodId", dto.DepreciationMethodId);
+        p.Add("@DepreciationStartDate", dto.DepreciationStartDate);
+        p.Add("@DepreciationBook", dto.DepreciationBook);
+        p.Add("@AssetAccount", dto.AssetAccount);
+        p.Add("@DepreciationAccount", dto.DepreciationAccount);
+        p.Add("@DisposalValue", dto.DisposalValue);
+        p.Add("@SupplierId", dto.SupplierId);
+        p.Add("@Currency", dto.Currency);
+        p.Add("@ParentAssetId", dto.ParentAssetId);
+        p.Add("@CustomFieldsJson", dto.CustomFieldsJson);
+        p.Add("@Notes", dto.Notes);
+        p.Add("@CreatedBy", createdBy);
 
-        await conn.ExecuteAsync(sql, parameters, commandType: CommandType.StoredProcedure);
+        const string sql = @"
+            EXEC usp_Asset_Insert_V3 
+                @AssetName, @Description, @SearchDescription, @Manufacturer, @ManufactureDate,
+                @Barcode, @SerialNumber, @InventoryNumber, @ScannedBarcodeResponse,
+                @CategoryId, @DepartmentId, @LocationId, @AssetStatusId, @ResponsiblePersonId,
+                @PurchaseDate, @PurchaseValue, @SalvageValue, @UsefulLifeMonths,
+                @DepreciationMethodId, @DepreciationStartDate, @DepreciationBook,
+                @AssetAccount, @DepreciationAccount, @DisposalValue, @SupplierId, @Currency,
+                @ParentAssetId, @CustomFieldsJson, @Notes, @CreatedBy;
 
-        // ბოლო ID-ის მიღება
-        return await conn.QuerySingleAsync<int>("SELECT SCOPE_IDENTITY()");
+            SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+        return await conn.QuerySingleAsync<int>(sql, p);
     }
 
-    // PUT: api/assets/{id} (usp_Asset_Update_V3)
+    // UPDATE
     public async Task UpdateAsync(AssetUpdateDto dto, string updatedBy)
     {
-        const string sql = "usp_Asset_Update_V3";
-        using var conn = CreateConnection();
-        await conn.OpenAsync();
+        await using var conn = CreateConnection();
 
-        var parameters = new DynamicParameters(dto);
-        parameters.Add("@UpdatedBy", updatedBy);
+        var p = new DynamicParameters();
+        p.Add("@Id", dto.Id);
+        p.Add("@AssetName", dto.AssetName);
+        p.Add("@Description", dto.Description);
+        p.Add("@SearchDescription", dto.SearchDescription);
+        p.Add("@Manufacturer", dto.Manufacturer);
+        p.Add("@ManufactureDate", dto.ManufactureDate);
+        p.Add("@Barcode", dto.Barcode);
+        p.Add("@SerialNumber", dto.SerialNumber);
+        p.Add("@InventoryNumber", dto.InventoryNumber);
+        p.Add("@ScannedBarcodeResponse", dto.ScannedBarcodeResponse);
+        p.Add("@CategoryId", dto.CategoryId);
+        p.Add("@DepartmentId", dto.DepartmentId);
+        p.Add("@LocationId", dto.LocationId);
+        p.Add("@AssetStatusId", dto.AssetStatusId);
+        p.Add("@ResponsiblePersonId", dto.ResponsiblePersonId);
+        p.Add("@PurchaseDate", dto.PurchaseDate);
+        p.Add("@PurchaseValue", dto.PurchaseValue);
+        p.Add("@SalvageValue", dto.SalvageValue);
+        p.Add("@UsefulLifeMonths", dto.UsefulLifeMonths);
+        p.Add("@DepreciationMethodId", dto.DepreciationMethodId);
+        p.Add("@DepreciationStartDate", dto.DepreciationStartDate);
+        p.Add("@DepreciationBook", dto.DepreciationBook);
+        p.Add("@AssetAccount", dto.AssetAccount);
+        p.Add("@DepreciationAccount", dto.DepreciationAccount);
+        p.Add("@DisposalValue", dto.DisposalValue);
+        p.Add("@SupplierId", dto.SupplierId);
+        p.Add("@Currency", dto.Currency);
+        p.Add("@ParentAssetId", dto.ParentAssetId);
+        p.Add("@CustomFieldsJson", dto.CustomFieldsJson);
+        p.Add("@Notes", dto.Notes);
+        p.Add("@UpdatedBy", updatedBy);
 
-        await conn.ExecuteAsync(sql, parameters, commandType: CommandType.StoredProcedure);
+        await conn.ExecuteAsync("usp_Asset_Update_V3", p, commandType: CommandType.StoredProcedure);
     }
 
-    // DELETE: api/assets/{id} (usp_Asset_Delete_V3)
+    // DELETE
     public async Task DeleteAsync(int id, string deletedBy)
     {
-        const string sql = "usp_Asset_Delete_V3";
-        using var conn = CreateConnection();
-        await conn.OpenAsync();
-
-        var parameters = new { Id = id, DeletedBy = deletedBy };
-        await conn.ExecuteAsync(sql, parameters, commandType: CommandType.StoredProcedure);
+        await using var conn = CreateConnection();
+        await conn.ExecuteAsync("usp_Asset_Delete_V3",
+            new { Id = id, DeletedBy = deletedBy },
+            commandType: CommandType.StoredProcedure);
     }
 
-    // POST: api/assets/run-depreciation (usp_CalculateAssetDepreciation_Manual_V3)
+    // RUN DEPRECIATION
     public async Task<string> RunManualDepreciationAsync(string runBy)
     {
-        const string sql = "usp_CalculateAssetDepreciation_Manual_V3";
-        using var conn = CreateConnection();
-        await conn.OpenAsync();
-
-        var parameters = new { RunBy = runBy };
-        await conn.ExecuteAsync(sql, parameters, commandType: CommandType.StoredProcedure);
+        await using var conn = CreateConnection();
+        await conn.ExecuteAsync("usp_CalculateAssetDepreciation_Manual_V3",
+            new { RunBy = runBy },
+            commandType: CommandType.StoredProcedure);
 
         return "Depreciation calculated successfully!";
     }

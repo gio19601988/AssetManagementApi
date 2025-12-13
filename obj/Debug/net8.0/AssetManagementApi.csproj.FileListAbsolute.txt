@@ -69,3 +69,4 @@ C:\AssetManagementApi\obj\Debug\net8.0\refint\AssetManagementApi.dll
 C:\AssetManagementApi\obj\Debug\net8.0\AssetManagementApi.pdb
 C:\AssetManagementApi\obj\Debug\net8.0\AssetManagementApi.genruntimeconfig.cache
 C:\AssetManagementApi\obj\Debug\net8.0\ref\AssetManagementApi.dll
+C:\AssetManagementApi\obj\Debug\net8.0\AssetManagementApi.sourcelink.json
