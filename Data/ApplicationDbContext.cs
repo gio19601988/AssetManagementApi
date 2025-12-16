@@ -9,6 +9,8 @@ public class ApplicationDbContext : DbContext
         : base(options) { }
 
     public DbSet<AppUser> AppUsers { get; set; } = null!;
+    public DbSet<Asset> Assets { get; set; } = null!;
+    public DbSet<AssetFile> AssetFiles { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
 {

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Text;  // Encoding.UTF8-ისთვის
+using Microsoft.IdentityModel.Tokens;     // <--- ახალი: SymmetricSecurityKey, SigningCredentials, SecurityAlgorithms
+using System.IdentityModel.Tokens.Jwt; // <--- ახალი: JwtSecurityToken, JwtSecurityTokenHandler
+using System.Text;
 
 namespace AssetManagementApi.Controllers;
 
@@ -14,14 +16,17 @@ namespace AssetManagementApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly IPasswordHasher<AppUser> _passwordHasher;  // Models. წაშალე!
+    private readonly IPasswordHasher<AppUser> _passwordHasher;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(ApplicationDbContext context)
+    public AuthController(ApplicationDbContext context, IConfiguration configuration)
     {
         _context = context;
-        _passwordHasher = new PasswordHasher<AppUser>();  // Models. წაშალე!
+        _configuration = configuration;
+        _passwordHasher = new PasswordHasher<AppUser>();
     }
 
+    // POST: api/Auth/login
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -52,6 +57,50 @@ public class AuthController : ControllerBase
         ));
     }
 
+    // POST: api/Auth/register (მხოლოდ Admin-ისთვის)
+    [HttpPost("register")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest(new { message = "მომხმარებლის სახელი და პაროლი აუცილებელია" });
+
+        // უნიკალურობის შემოწმება
+        var existingUser = await _context.AppUsers
+            .AnyAsync(u => u.Username == request.Username);
+
+        if (existingUser)
+            return Conflict(new { message = "ეს მომხმარებლის სახელი უკვე არსებობს" });
+
+        // ახალი მომხმარებლის შექმნა
+        var newUser = new AppUser
+        {
+            Username = request.Username.Trim(),
+            FullName = string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim(),
+            Role = request.Role.Trim(),
+            IsActive = request.IsActive,
+            // თუ გაქვს CreatedAt/CreatedBy ველები:
+            // CreatedAt = DateTime.UtcNow,
+            // CreatedBy = User.Identity?.Name ?? "system"
+        };
+
+        // პაროლის ჰეშირება
+        newUser.PasswordHash = _passwordHasher.HashPassword(newUser, request.Password);
+
+        _context.AppUsers.Add(newUser);
+        await _context.SaveChangesAsync();
+
+        var response = new RegisterResponse(
+            Id: newUser.Id,
+            Username: newUser.Username,
+            FullName: newUser.FullName ?? newUser.Username,
+            Role: newUser.Role
+        );
+
+        return CreatedAtAction(nameof(Register), response);
+    }
+
+    // POST: api/Auth/set-initial-password (დროებითი – production-ში წაშალე!)
     [HttpPost("set-initial-password")]
     [AllowAnonymous]
     public async Task<IActionResult> SetInitialPassword([FromBody] SetPasswordRequest request)
@@ -68,15 +117,19 @@ public class AuthController : ControllerBase
         return Ok(new { message = $"პაროლი წარმატებით დაყენდა მომხმარებელ {request.Username}-სთვის" });
     }
 
+    // POST: api/Auth/change-password
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         var username = User.Identity?.Name;
+        if (string.IsNullOrEmpty(username))
+            return Unauthorized();
+
         var user = await _context.AppUsers.FirstOrDefaultAsync(u => u.Username == username);
 
         if (user == null || string.IsNullOrEmpty(user.PasswordHash))
-            return NotFound();
+            return NotFound(new { message = "მომხმარებელი არ მოიძებნა ან პაროლი არ არის დაყენებული" });
 
         var verifyOld = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.OldPassword);
         if (verifyOld == PasswordVerificationResult.Failed)
@@ -88,12 +141,10 @@ public class AuthController : ControllerBase
         return Ok(new { message = "პაროლი წარმატებით შეიცვალა" });
     }
 
-    private string GenerateJwtToken(AppUser user)  // Models. წაშალე!
+    private string GenerateJwtToken(AppUser user)
     {
-        var configuration = HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-        var jwtSettings = configuration.GetSection("Jwt");
-
-        var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);  // System.Text. აღარ გჭირდება სრულად
+        var jwtSettings = _configuration.GetSection("Jwt");
+        var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
         var issuer = jwtSettings["Issuer"];
         var audience = jwtSettings["Audience"];
 
@@ -105,19 +156,17 @@ public class AuthController : ControllerBase
             new System.Security.Claims.Claim(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var creds = new Microsoft.IdentityModel.Tokens.SigningCredentials(
-            new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(key),
-            Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
+        var creds = new SigningCredentials(
+            new SymmetricSecurityKey(key),
+            SecurityAlgorithms.HmacSha256);
 
-        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+        var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,
             claims: claims,
             expires: DateTime.UtcNow.AddHours(8),
             signingCredentials: creds);
 
-        return new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
-
-// DTO-ები გადაიტანე DTOs საქაღალდეში! აქ არ უნდა იყოს.

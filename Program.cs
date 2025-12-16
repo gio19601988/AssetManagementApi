@@ -98,6 +98,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
+app.UseStaticFiles();  // <--- აუცილებელია wwwroot/files-ის მისაცემად
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
