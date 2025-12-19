@@ -17,54 +17,54 @@ public class AssetRepository
     private SqlConnection CreateConnection() => new(_connectionString);
 
     // GET ALL
-    public async Task<IEnumerable<AssetDto>> GetAllAsync()
-    {
-        const string sql = @"
-            SELECT a.*, 
-                   c.Name AS CategoryName,
-                   d.Name AS DepartmentName,
-                   ISNULL(l.RoomNumber,'') + ' (' + ISNULL(b.Name,'') + ')' AS LocationName,
-                   e.FullName AS ResponsiblePersonName,
-                   s.StatusName,
-                   m.MethodName AS DepreciationMethodName
-            FROM Assets a
-            LEFT JOIN Categories c ON a.CategoryId = c.Id
-            LEFT JOIN Departments d ON a.DepartmentId = d.Id
-            LEFT JOIN Locations l ON a.LocationId = l.Id
-            LEFT JOIN Buildings b ON l.BuildingId = b.Id
-            LEFT JOIN Employees e ON a.ResponsiblePersonId = e.Id
-            LEFT JOIN AssetStatus s ON a.AssetStatusId = s.Id
-            LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
-            ORDER BY a.CreatedAt DESC";
+public async Task<IEnumerable<AssetDto>> GetAllAsync()
+{
+    const string sql = @"
+        SELECT a.*, 
+               c.Name AS CategoryName,
+               d.Name AS DepartmentName,
+               ISNULL(l.RoomNumber, '') + ' (' + ISNULL(b.Name, '') + ')' AS LocationName,
+               e.FullName AS ResponsiblePersonName,
+               s.StatusName AS AssetStatusName,
+               m.Name AS DepreciationMethodName
+        FROM Assets a
+        LEFT JOIN Categories c ON a.CategoryId = c.Id
+        LEFT JOIN Departments d ON a.DepartmentId = d.Id
+        LEFT JOIN Locations l ON a.LocationId = l.Id
+        LEFT JOIN Buildings b ON l.BuildingId = b.Id
+        LEFT JOIN Employees e ON a.ResponsiblePersonId = e.Id
+        LEFT JOIN AssetStatus s ON a.AssetStatusId = s.Id
+        LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
+        ORDER BY a.CreatedAt DESC";
 
-        await using var conn = CreateConnection();
-        return await conn.QueryAsync<AssetDto>(sql);
-    }
+    await using var conn = CreateConnection();
+    return await conn.QueryAsync<AssetDto>(sql);
+}
 
-    // GET BY ID
-    public async Task<AssetDto?> GetByIdAsync(int id)
-    {
-        const string sql = @"
-            SELECT a.*, 
-                   c.Name AS CategoryName,
-                   d.Name AS DepartmentName,
-                   ISNULL(l.RoomNumber,'') + ' (' + ISNULL(b.Name,'') + ')' AS LocationName,
-                   e.FullName AS ResponsiblePersonName,
-                   s.StatusName,
-                   m.MethodName AS DepreciationMethodName
-            FROM Assets a
-            LEFT JOIN Categories c ON a.CategoryId = c.Id
-            LEFT JOIN Departments d ON a.DepartmentId = d.Id
-            LEFT JOIN Locations l ON a.LocationId = l.Id
-            LEFT JOIN Buildings b ON l.BuildingId = b.Id
-            LEFT JOIN Employees e ON a.ResponsiblePersonId = e.Id
-            LEFT JOIN AssetStatus s ON a.AssetStatusId = s.Id
-            LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
-            WHERE a.Id = @Id";
+// GET BY ID
+public async Task<AssetDto?> GetByIdAsync(int id)
+{
+    const string sql = @"
+        SELECT a.*, 
+               c.Name AS CategoryName,
+               d.Name AS DepartmentName,
+               ISNULL(l.RoomNumber, '') + ' (' + ISNULL(b.Name, '') + ')' AS LocationName,
+               e.FullName AS ResponsiblePersonName,
+               s.StatusName AS AssetStatusName,
+               m.Name AS DepreciationMethodName
+        FROM Assets a
+        LEFT JOIN Categories c ON a.CategoryId = c.Id
+        LEFT JOIN Departments d ON a.DepartmentId = d.Id
+        LEFT JOIN Locations l ON a.LocationId = l.Id
+        LEFT JOIN Buildings b ON l.BuildingId = b.Id
+        LEFT JOIN Employees e ON a.ResponsiblePersonId = e.Id
+        LEFT JOIN AssetStatus s ON a.AssetStatusId = s.Id
+        LEFT JOIN DepreciationMethods m ON a.DepreciationMethodId = m.Id
+        WHERE a.Id = @Id";
 
-        await using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<AssetDto>(sql, new { Id = id });
-    }
+    await using var conn = CreateConnection();
+    return await conn.QueryFirstOrDefaultAsync<AssetDto>(sql, new { Id = id });
+}
 
     // CREATE – სწორი ID-ის დაბრუნებით
     public async Task<int> CreateAsync(AssetCreateDto dto, string createdBy)

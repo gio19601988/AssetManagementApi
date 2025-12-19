@@ -11,6 +11,14 @@ public class ApplicationDbContext : DbContext
     public DbSet<AppUser> AppUsers { get; set; } = null!;
     public DbSet<Asset> Assets { get; set; } = null!;
     public DbSet<AssetFile> AssetFiles { get; set; } = null!;
+    public DbSet<Category> Categories { get; set; } = null!;
+    public DbSet<Department> Departments { get; set; } = null!;
+    public DbSet<DepreciationMethod> DepreciationMethods { get; set; } = null!;
+    public DbSet<Employee> Employees { get; set; } = null!;
+    public DbSet<Supplier> Suppliers { get; set; } = null!;
+    public DbSet<AssetStatus> AssetStatus { get; set; } = null!;
+    public DbSet<Location> Locations { get; set; } = null!;
+    public DbSet<Building> Buildings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
 {

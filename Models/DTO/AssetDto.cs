@@ -27,7 +27,7 @@ public class AssetDto
     public decimal? SalvageValue { get; set; }
     public int? UsefulLifeMonths { get; set; }
     public int? DepreciationMethodId { get; set; }
-    public string? DepreciationMethodName { get; set; }
+    public string? Name { get; set; }
     public DateTime? DepreciationStartDate { get; set; }
     public string? DepreciationBook { get; set; }
     public string? AssetAccount { get; set; }

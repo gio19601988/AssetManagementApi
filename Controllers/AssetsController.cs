@@ -37,23 +37,31 @@ public class AssetsController : ControllerBase
     }
 
     // POST: api/assets
-    [HttpPost]
-    public async Task<ActionResult<AssetDto>> CreateAsset(AssetCreateDto createDto)
+[HttpPost]
+public async Task<ActionResult<AssetDto>> CreateAsset([FromBody] AssetCreateDto createDto)
+{
+    _logger.LogInformation("Received asset create request: {@Request}", createDto);
+
+    if (!ModelState.IsValid)
     {
-        try
-        {
-            var userName = User.Identity?.Name ?? "system";
-            var newId = await _repository.CreateAsync(createDto, userName);
-            var newAsset = await _repository.GetByIdAsync(newId);
-            return CreatedAtAction(nameof(GetAsset), new { id = newId }, newAsset);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating asset");
-            return BadRequest("Error creating asset: " + ex.Message);
-        }
+        _logger.LogWarning("ModelState invalid: {Errors}", ModelState);
+        return BadRequest(ModelState);
     }
 
+    try
+    {
+        var userName = User.Identity?.Name ?? "system";
+        var newId = await _repository.CreateAsync(createDto, userName);
+        var newAsset = await _repository.GetByIdAsync(newId);
+
+        return CreatedAtAction(nameof(GetAsset), new { id = newId }, newAsset);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error creating asset");
+        return BadRequest("Error creating asset: " + ex.Message);
+    }
+}
     // PUT: api/assets/5
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateAsset(int id, AssetUpdateDto updateDto)
