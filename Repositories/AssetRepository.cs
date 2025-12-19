@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using System.Data;                    // <-- ეს დაამატე! (აუცილებელია CommandType-სთვის)
 using AssetManagementApi.Models.DTO;
+using AssetManagementApi.DTOs;
 
 namespace AssetManagementApi.Repositories;
 
@@ -118,6 +119,8 @@ public async Task<AssetDto?> GetByIdAsync(int id)
         return await conn.QuerySingleAsync<int>(sql, p);
     }
 
+    
+
     // UPDATE
     public async Task UpdateAsync(AssetUpdateDto dto, string updatedBy)
     {
@@ -178,4 +181,18 @@ public async Task<AssetDto?> GetByIdAsync(int id)
 
         return "Depreciation calculated successfully!";
     }
+    // LOOKUP – Parent Asset dropdown-ისთვის
+    public async Task<IEnumerable<LookupDto>> GetAssetsLookupAsync()
+   {
+      const string sql = @"
+         SELECT 
+             Id,
+             AssetName AS Name
+         FROM Assets
+         ORDER BY AssetName
+     ";
+    
+     await using var conn = CreateConnection();
+     return await conn.QueryAsync<LookupDto>(sql);
+   }
 }

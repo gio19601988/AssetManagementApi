@@ -35,6 +35,13 @@ public class AssetsController : ControllerBase
         if (asset == null) return NotFound();
         return Ok(asset);
     }
+    // GET: api/assets/lookup
+    [HttpGet("lookup")]
+    public async Task<IActionResult> GetAssetsLookup()
+    {
+        var assets = await _repository.GetAssetsLookupAsync();
+        return Ok(assets);
+    }
 
     // POST: api/assets
 [HttpPost]
