@@ -19,6 +19,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AssetStatus> AssetStatus { get; set; } = null!;
     public DbSet<Location> Locations { get; set; } = null!;
     public DbSet<Building> Buildings { get; set; } = null!;
+    public DbSet<AssetDepreciationHistory> AssetDepreciationHistory { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
 {
