@@ -8,5 +8,6 @@ public record EmployeeDto(
     int? DepartmentId,
     string? DepartmentName,
     string? Phone,
-    string? Email
+    string? Email,
+    DateTime CreatedAt
 );

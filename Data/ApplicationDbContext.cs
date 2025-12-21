@@ -20,6 +20,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Location> Locations { get; set; } = null!;
     public DbSet<Building> Buildings { get; set; } = null!;
     public DbSet<AssetDepreciationHistory> AssetDepreciationHistory { get; set; } = null!;
+    public DbSet<InventorySession> InventorySessions { get; set; } = null!;
+    public DbSet<InventoryScan> InventoryScans { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
 {

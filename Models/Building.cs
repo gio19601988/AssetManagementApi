@@ -1,24 +1,30 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace AssetManagementApi.Models;
-
-public class Building
+namespace AssetManagementApi.Models
 {
-    [Key]
-    public int Id { get; set; }
+    public class Building
+    {
+        [Key]
+        public int Id { get; set; }
 
-    [Required]
-    [MaxLength(255)]
-    public string Name { get; set; } = null!;
+        [Required]
+        [MaxLength(255)]
+        public string Name { get; set; } = string.Empty;
 
-    public string? Address { get; set; }
+        [Required]
+        [MaxLength(100)]
+        public string Code { get; set; } = string.Empty;
 
-    public bool IsActive { get; set; } = true;
+        [MaxLength(500)]
+        public string? Address { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
 
-    public string CreatedBy { get; set; } = null!;
+        public bool IsActive { get; set; } = true;
 
-    // Navigation
-    public ICollection<Location> Locations { get; set; } = new List<Location>();
+        public DateTime CreatedAt { get; set; }
+        public string CreatedBy { get; set; } = string.Empty;
+        public DateTime? UpdatedAt { get; set; }
+        public string? UpdatedBy { get; set; }
+    }
 }
