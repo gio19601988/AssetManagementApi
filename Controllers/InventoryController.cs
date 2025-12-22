@@ -13,7 +13,6 @@ namespace AssetManagementApi.Controllers
     public class InventoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-
         public InventoryController(ApplicationDbContext context)
         {
             _context = context;
@@ -35,6 +34,7 @@ namespace AssetManagementApi.Controllers
             var session = new InventorySession
             {
                 SessionName = request.SessionName,
+                DepartmentId = request.DepartmentId,  // ახალი: NULL თუ სრული, ID თუ კონკრეტული დეპარტამენტი
                 CreatedBy = User.Identity?.Name ?? "Unknown",
                 Status = "Active"
             };
@@ -60,7 +60,7 @@ namespace AssetManagementApi.Controllers
                     AssetName = g.First().Asset.AssetName,
                     Barcode = g.First().Asset.Barcode,
                     ScannedQuantity = g.Sum(s => s.Quantity),
-                    ExpectedQuantity = 1  // შენ შეგიძლია შეცვალო ლოგიკა
+                    ExpectedQuantity = 1 // შეცვალე შენი ლოგიკით
                 })
                 .ToListAsync();
 
@@ -71,30 +71,20 @@ namespace AssetManagementApi.Controllers
         [HttpPost("scan")]
         public async Task<ActionResult> AddScan([FromBody] ScanRequest request)
         {
-            // SessionId მოდის request-დან — არ გვჭირდება currentSessionId
-            var session = await _context.InventorySessions.FindAsync(request.SessionId);
-            if (session == null || session.Status != "Active")
-                return BadRequest(new { message = "სესია არ მოიძებნა ან არ არის აქტიური" });
-
-            var asset = await _context.Assets
-                .Select(a => new { a.Id, a.Barcode, a.SerialNumber })
-                .FirstOrDefaultAsync(a => a.Barcode == request.Barcode || a.SerialNumber == request.Barcode);
-
-            if (asset == null)
-                return NotFound(new { message = "აქტივი არ მოიძებნა ბარკოდით ან სერიული ნომრით" });
+            var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Barcode == request.Barcode || a.SerialNumber == request.Barcode);
+            if (asset == null) return NotFound(new { message = "აქტივი არ მოიძებნა ბარკოდით/სერიულით" });
 
             var scan = new InventoryScan
             {
                 SessionId = request.SessionId,
                 AssetId = asset.Id,
                 ScannedBarcode = request.Barcode,
+                ScannedAt = DateTime.UtcNow,
                 ScannedBy = User.Identity?.Name ?? "Unknown",
                 Quantity = 1
             };
-
             _context.InventoryScans.Add(scan);
             await _context.SaveChangesAsync();
-
             return Ok(new { message = "სკანი წარმატებით დარეგისტრირდა" });
         }
 
@@ -112,111 +102,59 @@ namespace AssetManagementApi.Controllers
             return Ok(new { message = "სესია დასრულდა" });
         }
 
+        // დისკრეპანსიის გენერაცია დეპარტამენტის მიხედვით
         // GET: api/inventory/session/{id}/discrepancies
         [HttpGet("session/{id}/discrepancies")]
-        [Authorize(Roles = "Admin,User")]
         public async Task<ActionResult<object>> GetDiscrepancies(int id)
         {
             var session = await _context.InventorySessions.FindAsync(id);
-            if (session == null) return NotFound("სესია არ მოიძებნა");
+            if (session == null) return NotFound();
 
-            // სკანირებული აქტივები (რაოდენობა)
-            var scanned = await _context.InventoryScans
+            var expectedAssetsQuery = _context.Assets.AsQueryable();
+
+            if (session.DepartmentId.HasValue)
+            {
+                expectedAssetsQuery = expectedAssetsQuery.Where(a => a.DepartmentId == session.DepartmentId.Value);
+            }
+
+            var expectedAssets = await expectedAssetsQuery.Select(a => new
+            {
+                a.Id,
+                a.AssetName,
+                a.Barcode,
+                Expected = 1  // ან შენი ლოგიკა (მაგ. Quantity თუ გაქვს)
+            }).ToListAsync();
+
+            var scannedAssets = await _context.InventoryScans
                 .Where(s => s.SessionId == id)
                 .GroupBy(s => s.AssetId)
                 .Select(g => new
                 {
                     AssetId = g.Key,
-                    ScannedQuantity = g.Sum(s => s.Quantity)
-                })
-                .ToListAsync();
+                    Scanned = g.Count()
+                }).ToListAsync();
 
-            var scannedAssetIds = scanned.Select(s => s.AssetId).ToHashSet();
+            // შედარება და დისკრეპანსია
+            // მაგალითად:
+            var missing = expectedAssets.Where(e => !scannedAssets.Any(s => s.AssetId == e.Id)).ToList();
+            var excess = scannedAssets.Where(s => !expectedAssets.Any(e => e.Id == s.AssetId)).ToList();
+            var matched = scannedAssets.Where(s => expectedAssets.Any(e => e.Id == s.AssetId)).ToList();
 
-            // ყველა აქტივი (ვივარაუდოთ, რომ რაოდენობა 1-ია)
-            var allAssets = await _context.Assets
-                .Select(a => new { a.Id, a.AssetName, a.Barcode, a.SerialNumber })
-                .ToListAsync();
+            var summary = new {
+                totalAssets = expectedAssets.Count,
+                scanned = scannedAssets.Sum(s => s.Scanned),
+                missing = missing.Count,
+                excess = excess.Count,
+                matched = matched.Count
+            };
 
-            // აკლია (არა სკანირებული)
-            var missing = allAssets
-                .Where(a => !scannedAssetIds.Contains(a.Id))
-                .Select(a => new
-                {
-                    AssetId = a.Id,
-                    AssetName = a.AssetName,
-                    Barcode = a.Barcode ?? a.SerialNumber ?? "-",
-                    Expected = 1,
-                    Scanned = 0,
-                    Difference = -1
-                })
-                .ToList();
-
-            // ზედმეტია (მრავალჯერ სკანირებული)
-            var excess = scanned
-                .Where(s => s.ScannedQuantity > 1)
-                .Join(allAssets,
-                    s => s.AssetId,
-                    a => a.Id,
-                    (s, a) => new
-                    {
-                        AssetId = a.Id,
-                        AssetName = a.AssetName,
-                        Barcode = a.Barcode ?? a.SerialNumber ?? "-",
-                        Expected = 1,
-                        Scanned = s.ScannedQuantity,
-                        Difference = s.ScannedQuantity - 1
-                    })
-                .ToList();
-
-            // შესაბამისობა (სწორად სკანირებული)
-            var matched = scanned
-                .Where(s => s.ScannedQuantity == 1)
-                .Join(allAssets,
-                    s => s.AssetId,
-                    a => a.Id,
-                    (s, a) => new
-                    {
-                        AssetId = a.Id,
-                        AssetName = a.AssetName,
-                        Barcode = a.Barcode ?? a.SerialNumber ?? "-",
-                        Expected = 1,
-                        Scanned = 1,
-                        Difference = 0
-                    })
-                .ToList();
-
-            return Ok(new
-            {
-                session = new { session.Id, session.SessionName, session.Status },
-                summary = new
-                {
-                    TotalAssets = allAssets.Count,
-                    Scanned = scanned.Sum(s => s.ScannedQuantity),
-                    Missing = missing.Count,
-                    Excess = excess.Sum(e => e.Difference),
-                    Matched = matched.Count
-                },
-                missing,
-                excess,
-                matched
-            });
+            return Ok(new { summary, missing, excess, matched });
         }
-
-        [HttpPost("session/{id}/reopen")]
-        public async Task<IActionResult> ReopenSession(int id)
-        {
-            var session = await _context.InventorySessions.FindAsync(id);
-            if (session == null) return NotFound();
-
-            if (session.Status != "Completed") return BadRequest("სესია უკვე აქტიურია");
-
-            session.Status = "Active";
-            session.EndedAt = null; // ან გაანახლე
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message: "სესია თავიდან გაიხსნა" });
-        }
-
     }
+}
+
+public class CreateSessionRequest
+{
+    public string SessionName { get; set; } = string.Empty;
+    public int? DepartmentId { get; set; }  // ახალი: optional დეპარტამენტი
 }
