@@ -309,3 +309,12 @@ D:\AssetManagementApi\obj\Debug\net8.0\swae.build.ex.cache
 D:\AssetManagementApi\obj\Debug\net8.0\AssetMan.A4A687E8.Up2Date
 D:\AssetManagementApi\obj\Debug\net8.0\AssetManagementApi.genruntimeconfig.cache
 D:\AssetManagementApi\obj\Debug\net8.0\ref\AssetManagementApi.dll
+C:\AssetManagementApi\bin\Debug\net8.0\package-lock.json
+C:\AssetManagementApi\bin\Debug\net8.0\package.json
+C:\AssetManagementApi\bin\Debug\net8.0\SkiaSharp.dll
+C:\AssetManagementApi\bin\Debug\net8.0\zxing.dll
+C:\AssetManagementApi\bin\Debug\net8.0\ZXing.SkiaSharp.dll
+C:\AssetManagementApi\bin\Debug\net8.0\runtimes\osx\native\libSkiaSharp.dylib
+C:\AssetManagementApi\bin\Debug\net8.0\runtimes\win-arm64\native\libSkiaSharp.dll
+C:\AssetManagementApi\bin\Debug\net8.0\runtimes\win-x64\native\libSkiaSharp.dll
+C:\AssetManagementApi\bin\Debug\net8.0\runtimes\win-x86\native\libSkiaSharp.dll
