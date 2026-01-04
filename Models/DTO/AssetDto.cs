@@ -38,6 +38,8 @@ public class AssetDto
     public int? ParentAssetId { get; set; }
     public string? CustomFieldsJson { get; set; }
     public string? Notes { get; set; }
+    public string? DosageForm { get; set; }      // ფორმა
+    public string? Concentration { get; set; }   // კონცენტრაცია
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime? UpdatedAt { get; set; }
@@ -75,6 +77,8 @@ public class AssetCreateDto
     public int? ParentAssetId { get; set; }
     public string? CustomFieldsJson { get; set; }
     public string? Notes { get; set; }
+    public string? DosageForm { get; set; }      // ფორმა
+    public string? Concentration { get; set; }   // კონცენტრაცია
 }
 
 public class AssetUpdateDto : AssetCreateDto

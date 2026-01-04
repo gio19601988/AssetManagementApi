@@ -13,6 +13,7 @@ public class Location
     [Required]
     [MaxLength(100)]
     public string RoomNumber { get; set; } = null!;
+    public string? Description { get; set; }  // ← დამატებული
 
     public bool IsActive { get; set; } = true;
 
@@ -21,6 +22,8 @@ public class Location
     [Required]
     [MaxLength(255)]
     public string CreatedBy { get; set; } = null!;
+    public DateTime? UpdatedAt { get; set; }  // ← დამატებული
+    public string? UpdatedBy { get; set; }   // ← დამატებული
 
     // Navigation
     public Building Building { get; set; } = null!;

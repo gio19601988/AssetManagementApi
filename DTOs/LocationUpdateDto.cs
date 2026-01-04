@@ -1,7 +1,8 @@
 namespace AssetManagementApi.DTOs;
-
+// DTOs/LocationUpdateDto.cs
 public record LocationUpdateDto(
-    int? BuildingId = null,
-    string? RoomNumber = null,
-    bool? IsActive = null
+        int BuildingId,
+    string RoomNumber,
+    string? Description = null,
+    bool IsActive = true
 );

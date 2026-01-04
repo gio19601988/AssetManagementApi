@@ -1,3 +1,4 @@
+// Controllers/LocationsController.cs
 using AssetManagementApi.Data;
 using AssetManagementApi.DTOs;
 using AssetManagementApi.Models;
@@ -10,6 +11,7 @@ namespace AssetManagementApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Admin")]  // მხოლოდ ადმინი მართავს
 public class LocationsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -19,26 +21,26 @@ public class LocationsController : ControllerBase
         _context = context;
     }
 
-    // GET: api/locations
+    // GET: api/locations — სრული სია
     [HttpGet]
-    [AllowAnonymous]
+    [AllowAnonymous]  // ყველას შეუძლია წაიკითხოს (ფორმებში გამოყენებისთვის)
     public async Task<ActionResult<IEnumerable<LocationDto>>> GetLocations()
     {
-        var locationsFromDb = await _context.Locations
+        var locations = await _context.Locations
             .Include(l => l.Building)
             .Where(l => l.IsActive)
-            .OrderBy(l => l.Building.Name).ThenBy(l => l.RoomNumber)
+            .OrderBy(l => l.Building.Name)
+            .ThenBy(l => l.RoomNumber)
+            .Select(l => new LocationDto(
+                l.Id,
+                $"{l.Building.Name} - {l.RoomNumber}",
+                l.BuildingId,
+                l.Building.Name,
+                l.RoomNumber,
+                l.IsActive,
+                l.CreatedAt
+            ))
             .ToListAsync();
-
-        var locations = locationsFromDb.Select(l => new LocationDto(
-            l.Id,
-            $"{l.Building.Name} - {l.RoomNumber}",  // Name
-            l.BuildingId,
-            l.Building.Name,
-            l.RoomNumber,
-            l.IsActive,
-            l.CreatedAt
-        )).ToList();
 
         return Ok(locations);
     }
@@ -48,38 +50,44 @@ public class LocationsController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<LocationDto>> GetLocation(int id)
     {
-        var locationFromDb = await _context.Locations
+        var location = await _context.Locations
             .Include(l => l.Building)
-            .FirstOrDefaultAsync(l => l.Id == id && l.IsActive);
+            .Where(l => l.Id == id && l.IsActive)
+            .Select(l => new LocationDto(
+                l.Id,
+                $"{l.Building.Name} - {l.RoomNumber}",
+                l.BuildingId,
+                l.Building.Name,
+                l.RoomNumber,
+                l.IsActive,
+                l.CreatedAt
+            ))
+            .FirstOrDefaultAsync();
 
-        if (locationFromDb == null)
+        if (location == null)
             return NotFound(new { message = "ადგილმდებარეობა არ მოიძებნა" });
-
-        var location = new LocationDto(
-            locationFromDb.Id,
-            $"{locationFromDb.Building.Name} - {locationFromDb.RoomNumber}",
-            locationFromDb.BuildingId,
-            locationFromDb.Building.Name,
-            locationFromDb.RoomNumber,
-            locationFromDb.IsActive,
-            locationFromDb.CreatedAt
-        );
 
         return Ok(location);
     }
 
-    // POST: api/locations
+    // POST: api/locations — ახლის დამატება
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<LocationDto>> CreateLocation([FromBody] LocationCreateDto request)
     {
-        if (!await _context.Buildings.AnyAsync(b => b.Id == request.BuildingId))
-            return BadRequest(new { message = "შენობა არ მოიძებნა" });
+        if (!await _context.Buildings.AnyAsync(b => b.Id == request.BuildingId && b.IsActive))
+            return BadRequest(new { message = "შენობა არ მოიძებნა ან არააქტიურია" });
+
+        // უნიკალურობის შემოწმება (ერთ შენობაში ერთი და იგივე ოთახის ნომერი)
+        if (await _context.Locations.AnyAsync(l => 
+            l.BuildingId == request.BuildingId && 
+            l.RoomNumber == request.RoomNumber.Trim()))
+            return Conflict(new { message = "ეს ოთახის ნომერი უკვე არსებობს ამ შენობაში" });
 
         var newLocation = new Location
         {
             BuildingId = request.BuildingId,
             RoomNumber = request.RoomNumber.Trim(),
+            Description = request.Description?.Trim(),
             IsActive = request.IsActive,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = User.FindFirst(ClaimTypes.Name)?.Value ?? "system"
@@ -103,6 +111,51 @@ public class LocationsController : ControllerBase
         return CreatedAtAction(nameof(GetLocation), new { id = newLocation.Id }, dto);
     }
 
-    // PUT და DELETE — უცვლელი (კარგია)
-    // ... (შენი კოდი)
+    // PUT: api/locations/{id} — განახლება
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateLocation(int id, [FromBody] LocationUpdateDto request)
+    {
+        var location = await _context.Locations
+            .Include(l => l.Building)
+            .FirstOrDefaultAsync(l => l.Id == id);
+
+        if (location == null)
+            return NotFound(new { message = "ადგილმდებარეობა არ მოიძებნა" });
+
+        // უნიკალურობა (გარდა საკუთარი თავისა)
+        if (await _context.Locations.AnyAsync(l => 
+            l.Id != id &&
+            l.BuildingId == request.BuildingId && 
+            l.RoomNumber == request.RoomNumber.Trim()))
+            return Conflict(new { message = "ეს ოთახის ნომერი უკვე არსებობს ამ შენობაში" });
+
+        location.BuildingId = request.BuildingId;
+        location.RoomNumber = request.RoomNumber.Trim();
+        location.Description = request.Description?.Trim();
+        location.IsActive = request.IsActive;
+        location.UpdatedAt = DateTime.UtcNow;
+        location.UpdatedBy = User.FindFirst(ClaimTypes.Name)?.Value ?? "system";
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    // DELETE: api/locations/{id}
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteLocation(int id)
+    {
+        var location = await _context.Locations.FindAsync(id);
+        if (location == null)
+            return NotFound(new { message = "ადგილმდებარეობა არ მოიძებნა" });
+
+        // თუ აქტივებია მიბმული – აკრძალვა (ან გადატანა „უცნობ“ ლოკაციაზე)
+        if (await _context.Assets.AnyAsync(a => a.LocationId == id))
+            return BadRequest(new { message = "ამ ადგილმდებარეობაზე მიბმულია აქტივები – წაშლა შეუძლებელია" });
+
+        _context.Locations.Remove(location);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
 }
