@@ -79,5 +79,24 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(sm => sm.SupplierId)
             .OnDelete(DeleteBehavior.SetNull);
+            
+        builder.Entity<Asset>(entity =>
+    {
+        entity.Property(a => a.PurchaseValue)
+            .HasColumnType("decimal(18,2)");
+
+        entity.Property(a => a.SalvageValue)
+            .HasColumnType("decimal(18,2)");
+
+        entity.Property(a => a.DisposalValue)
+            .HasColumnType("decimal(18,2)");
+    });
+
+        builder.Entity<StockMovement>(entity =>
+        {
+            entity.Property(sm => sm.Quantity)
+                .HasColumnType("decimal(18,2)");
+        });
+
     }
 }

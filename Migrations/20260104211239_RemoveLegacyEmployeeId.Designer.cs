@@ -4,6 +4,7 @@ using AssetManagementApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AssetManagementApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260104211239_RemoveLegacyEmployeeId")]
+    partial class RemoveLegacyEmployeeId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -73,7 +76,7 @@ namespace AssetManagementApi.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("AppUsers", (string)null);
+                    b.ToTable("AppUsers");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Asset", b =>
@@ -204,7 +207,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("Assets", (string)null);
+                    b.ToTable("Assets");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.AssetDepreciationHistory", b =>
@@ -243,7 +246,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("AssetId");
 
-                    b.ToTable("AssetDepreciationHistory", (string)null);
+                    b.ToTable("AssetDepreciationHistory");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.AssetFile", b =>
@@ -279,7 +282,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("AssetId");
 
-                    b.ToTable("AssetFiles", (string)null);
+                    b.ToTable("AssetFiles");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.AssetStatus", b =>
@@ -314,7 +317,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AssetStatus", (string)null);
+                    b.ToTable("AssetStatus");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Building", b =>
@@ -360,7 +363,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Buildings", (string)null);
+                    b.ToTable("Buildings");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Category", b =>
@@ -407,7 +410,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("ParentCategoryId");
 
-                    b.ToTable("Categories", (string)null);
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Department", b =>
@@ -441,7 +444,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Departments", (string)null);
+                    b.ToTable("Departments");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.DepreciationMethod", b =>
@@ -476,7 +479,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DepreciationMethods", (string)null);
+                    b.ToTable("DepreciationMethods");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Employee", b =>
@@ -524,7 +527,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("Employees", (string)null);
+                    b.ToTable("Employees");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.InventoryScan", b =>
@@ -564,7 +567,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("SessionId");
 
-                    b.ToTable("InventoryScans", (string)null);
+                    b.ToTable("InventoryScans");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.InventorySession", b =>
@@ -603,7 +606,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("InventorySessions", (string)null);
+                    b.ToTable("InventorySessions");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Location", b =>
@@ -646,7 +649,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("BuildingId");
 
-                    b.ToTable("Locations", (string)null);
+                    b.ToTable("Locations");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.StockMovement", b =>
@@ -714,7 +717,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("StockMovements", (string)null);
+                    b.ToTable("StockMovements");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Supplier", b =>
@@ -766,7 +769,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Suppliers", (string)null);
+                    b.ToTable("Suppliers");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Warehouse", b =>
@@ -820,7 +823,7 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("ResponsiblePersonId");
 
-                    b.ToTable("Warehouses", (string)null);
+                    b.ToTable("Warehouses");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Asset", b =>

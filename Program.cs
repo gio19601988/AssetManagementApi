@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;  // აუცილებელი Swagger JWT-ისთვის
 using System.Text;
+using OfficeOpenXml;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,6 +87,7 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 });
+ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
 var app = builder.Build();
 

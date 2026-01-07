@@ -56,7 +56,7 @@
             },
             "EPPlus": {
               "target": "Package",
-              "version": "[8.4.0, )"
+              "version": "[7.4.1, )"
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
@@ -97,6 +97,10 @@
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",
               "version": "[8.0.*, )"
+            },
+            "UglyToad.PdfPig": {
+              "target": "Package",
+              "version": "[1.7.0-custom-5, )"
             },
             "ZXing.Net.Bindings.SkiaSharp": {
               "target": "Package",
