@@ -15,8 +15,8 @@ public class StockMovementDto
     public string? ToWarehouseName { get; set; }
     public int? SupplierId { get; set; }
     public string? SupplierName { get; set; }
-    public int? EmployeeId { get; set; }
-    public string? EmployeeName { get; set; }
+    public int? ResponsiblePersonId { get; set; }
+    public string? ResponsiblePersonName { get; set; }
     public string? ReferenceDocument { get; set; }  // ზედდებული/ფაქტურის ნომერი
     public DateTime MovementDate { get; set; }
     public string? Notes { get; set; }

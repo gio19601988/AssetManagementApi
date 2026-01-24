@@ -12,15 +12,15 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AssetManagementApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251229203647_AddDosageFormAndConcentrationToAssets")]
-    partial class AddDosageFormAndConcentrationToAssets
+    [Migration("20260124194513_FixAssetStatusNavigation")]
+    partial class FixAssetStatusNavigation
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.22")
+                .HasAnnotation("ProductVersion", "8.0.23")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -88,30 +88,39 @@ namespace AssetManagementApi.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AssetAccount")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("AssetName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<int?>("AssetStatusId")
                         .HasColumnType("int");
 
                     b.Property<string>("Barcode")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("CategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Concentration")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("CustomFieldsJson")
                         .HasColumnType("nvarchar(max)");
@@ -120,10 +129,12 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("DepreciationAccount")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("DepreciationBook")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("DepreciationMethodId")
                         .HasColumnType("int");
@@ -132,16 +143,20 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<decimal?>("DisposalValue")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("EmployeeId")
-                        .HasColumnType("int");
+                    b.Property<string>("DosageForm")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("InventoryNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("LocationId")
                         .HasColumnType("int");
@@ -150,7 +165,12 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Manufacturer")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal?>("MinStockLevel")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
@@ -162,22 +182,26 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal?>("PurchaseValue")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("ResponsiblePersonId")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("SalvageValue")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ScannedBarcodeResponse")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SearchDescription")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("SerialNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
@@ -186,7 +210,8 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<int?>("UsefulLifeMonths")
                         .HasColumnType("int");
@@ -195,15 +220,25 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("AssetStatusId");
 
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasFilter("[Barcode] IS NOT NULL");
+
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("DepartmentId");
 
                     b.HasIndex("DepreciationMethodId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("LocationId");
+
+                    b.HasIndex("ParentAssetId");
+
+                    b.HasIndex("ResponsiblePersonId");
+
+                    b.HasIndex("SerialNumber")
+                        .IsUnique()
+                        .HasFilter("[SerialNumber] IS NOT NULL");
 
                     b.HasIndex("SupplierId");
 
@@ -628,6 +663,9 @@ namespace AssetManagementApi.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -635,6 +673,12 @@ namespace AssetManagementApi.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -661,9 +705,6 @@ namespace AssetManagementApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("EmployeeId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("FromWarehouseId")
                         .HasColumnType("int");
 
@@ -679,11 +720,15 @@ namespace AssetManagementApi.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ReferenceDocument")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ResponsiblePersonId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
@@ -698,9 +743,9 @@ namespace AssetManagementApi.Migrations
 
                     b.HasIndex("AssetId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("FromWarehouseId");
+
+                    b.HasIndex("ResponsiblePersonId");
 
                     b.HasIndex("SupplierId");
 
@@ -819,39 +864,67 @@ namespace AssetManagementApi.Migrations
 
             modelBuilder.Entity("AssetManagementApi.Models.Asset", b =>
                 {
-                    b.HasOne("AssetManagementApi.Models.AssetStatus", null)
+                    b.HasOne("AssetManagementApi.Models.AssetStatus", "Status")
                         .WithMany("Assets")
-                        .HasForeignKey("AssetStatusId");
+                        .HasForeignKey("AssetStatusId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("AssetManagementApi.Models.Category", null)
+                    b.HasOne("AssetManagementApi.Models.Category", "Category")
                         .WithMany("Assets")
-                        .HasForeignKey("CategoryId");
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AssetManagementApi.Models.Department", null)
+                    b.HasOne("AssetManagementApi.Models.Department", "Department")
                         .WithMany("Assets")
-                        .HasForeignKey("DepartmentId");
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AssetManagementApi.Models.DepreciationMethod", null)
+                    b.HasOne("AssetManagementApi.Models.DepreciationMethod", "DepreciationMethod")
                         .WithMany("Assets")
-                        .HasForeignKey("DepreciationMethodId");
+                        .HasForeignKey("DepreciationMethodId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AssetManagementApi.Models.Employee", null)
+                    b.HasOne("AssetManagementApi.Models.Location", "Location")
+                        .WithMany("Assets")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AssetManagementApi.Models.Asset", "ParentAsset")
+                        .WithMany("ChildAssets")
+                        .HasForeignKey("ParentAssetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AssetManagementApi.Models.Employee", "ResponsiblePerson")
                         .WithMany("ResponsibleAssets")
-                        .HasForeignKey("EmployeeId");
+                        .HasForeignKey("ResponsiblePersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("AssetManagementApi.Models.Location", null)
+                    b.HasOne("AssetManagementApi.Models.Supplier", "Supplier")
                         .WithMany("Assets")
-                        .HasForeignKey("LocationId");
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("AssetManagementApi.Models.Supplier", null)
-                        .WithMany("Assets")
-                        .HasForeignKey("SupplierId");
+                    b.Navigation("Category");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("DepreciationMethod");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("ParentAsset");
+
+                    b.Navigation("ResponsiblePerson");
+
+                    b.Navigation("Status");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.AssetDepreciationHistory", b =>
                 {
                     b.HasOne("AssetManagementApi.Models.Asset", "Asset")
-                        .WithMany()
+                        .WithMany("DepreciationHistory")
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -862,7 +935,7 @@ namespace AssetManagementApi.Migrations
             modelBuilder.Entity("AssetManagementApi.Models.AssetFile", b =>
                 {
                     b.HasOne("AssetManagementApi.Models.Asset", "Asset")
-                        .WithMany("Files")
+                        .WithMany("AssetFiles")
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -932,18 +1005,18 @@ namespace AssetManagementApi.Migrations
                     b.HasOne("AssetManagementApi.Models.Asset", "Asset")
                         .WithMany()
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("AssetManagementApi.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("AssetManagementApi.Models.Warehouse", "FromWarehouse")
                         .WithMany()
                         .HasForeignKey("FromWarehouseId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AssetManagementApi.Models.Employee", "ResponsiblePerson")
+                        .WithMany()
+                        .HasForeignKey("ResponsiblePersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("AssetManagementApi.Models.Supplier", "Supplier")
                         .WithMany()
@@ -963,9 +1036,9 @@ namespace AssetManagementApi.Migrations
 
                     b.Navigation("Asset");
 
-                    b.Navigation("Employee");
-
                     b.Navigation("FromWarehouse");
+
+                    b.Navigation("ResponsiblePerson");
 
                     b.Navigation("Supplier");
 
@@ -997,7 +1070,11 @@ namespace AssetManagementApi.Migrations
 
             modelBuilder.Entity("AssetManagementApi.Models.Asset", b =>
                 {
-                    b.Navigation("Files");
+                    b.Navigation("AssetFiles");
+
+                    b.Navigation("ChildAssets");
+
+                    b.Navigation("DepreciationHistory");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.AssetStatus", b =>

@@ -32,8 +32,8 @@ namespace AssetManagementApi.Models
         public int? SupplierId { get; set; }
         public Supplier? Supplier { get; set; }  // შენი არსებული Suppliers
 
-        public int? EmployeeId { get; set; }
-        public Employee? Employee { get; set; }  // ვინ განახორციელა
+        public int? ResponsiblePersonId { get; set; }
+        public Employee? ResponsiblePerson { get; set; }  // ← ასე უკეთესია  // ვინ განახორციელა
 
         [MaxLength(100)]
         public string? ReferenceDocument { get; set; }  // ზედდებული/ფაქტურის ნომერი

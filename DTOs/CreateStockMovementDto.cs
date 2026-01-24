@@ -8,7 +8,7 @@ public class CreateStockMovementDto
         public int? FromWarehouseId { get; set; }
         public int? ToWarehouseId { get; set; }
         public int? SupplierId { get; set; }
-        public int? EmployeeId { get; set; }
+        public int? ResponsiblePersonId { get; set; }
         public string? ReferenceDocument { get; set; }
         public DateTime? MovementDate { get; set; }
         public string? Notes { get; set; }
