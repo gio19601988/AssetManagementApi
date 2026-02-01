@@ -96,9 +96,16 @@ namespace AssetManagementApi.Controllers
                         _context.Assets.Add(asset);
                         importedCount++;
                     }
-                    catch (Exception ex)
+                    catch (Exception rowEx)  // ✅ 'ex' → 'rowEx'
                     {
-                        errors.Add($"ხაზი {row}: {ex.Message}");
+                        errors.Add($"ხაზი {row}: {rowEx.Message}");
+                        
+                        // დეტალური ინფორმაცია თუ პასუხისმგებელი არ მოიძებნა
+                        if (rowEx.Message.Contains("ResponsiblePerson") || rowEx.Message.Contains("Employee"))
+                        {
+                            var responsibleName = worksheet.Cells[row, 12].GetValue<string>();
+                            errors.Add($"  → პასუხისმგებელი პირი '{responsibleName}' არ მოიძებნა");
+                        }
                     }
                 }
 
@@ -112,6 +119,7 @@ namespace AssetManagementApi.Controllers
             return Ok(new
             {
                 message = $"იმპორტი წარმატებით დასრულდა: {importedCount} აქტივი დაემატა",
+                importedCount = importedCount,
                 errors = errors.Any() ? errors : null
             });
         }

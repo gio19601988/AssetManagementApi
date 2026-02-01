@@ -7,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;  // აუცილებელი Swagger JWT-ისთვის
 using System.Text;
 using OfficeOpenXml;
+using Microsoft.Extensions.Logging; // თუ ლოგერი გჭირდება
+using Microsoft.AspNetCore.Http;  // IHttpContextAccessor-ისთვის
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // ==================== Services & Repositories ====================
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AssetRepository>(); // თუ namespace სწორია
+builder.Services.AddScoped<OrderService>();
+
+// დამატებული: HttpContextAccessor-ის რეგისტრაცია DI-ში (OrderService-ისთვის საჭირო)
+builder.Services.AddHttpContextAccessor();
 
 // ==================== Controllers & Swagger ====================
 builder.Services.AddControllers();
@@ -100,9 +106,33 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
-app.UseStaticFiles();  // <--- აუცილებელია wwwroot/files-ის მისაცემად
+app.UseStaticFiles();  // აუცილებელია wwwroot/files-ისთვის
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// ==================== Seed Data (ახალი ნაწილი) ====================
+// ეს გაუშვება ერთხელ აპლიკაციის გაშვებისას (ან შეგიძლია გააკეთო idempotent, რომ არ დუბლირდეს)
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+
+    try
+    {
+       
+        SeedData.Initialize(services);  // ან SeedData.SeedRolesAndPermissions(services); როგორც შენ გინდა დაარქვი
+
+        // ალტერნატიულად, თუ გინდა პირდაპირ აქ დაწერო (მაგრამ უკეთესია ცალკე კლასში)
+        // var context = services.GetRequiredService<ApplicationDbContext>();
+        // SeedRolesAndStatuses(context); // მაგალითად
+    }
+    catch (Exception ex)
+    {
+       
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Seed data-ს დროს შეცდომა: {Message}", ex.Message);
+    }
+}
+
+// ==================== Run ====================
 app.Run();
