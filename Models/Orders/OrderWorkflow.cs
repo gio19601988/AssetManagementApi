@@ -13,7 +13,7 @@ namespace AssetManagementApi.Models.Orders
         public OrderStatus? FromStatus { get; set; }
 
         public int? ToStatusId { get; set; }
-        public OrderStatus? ToStatus { get; set; }
+        public OrderStatus? ToStatus { get; set; } = null!;  // ← ეს დაამატე ან გაასწორე
 
         public int? ChangedBy { get; set; }
         // public ApplicationUser? ChangedByUser { get; set; }

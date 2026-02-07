@@ -29,6 +29,7 @@ namespace AssetManagementApi.Dtos.Orders
         public List<OrderItemDto> Items { get; set; } = new List<OrderItemDto>();
         public List<OrderDocumentDto> Documents { get; set; } = new List<OrderDocumentDto>();
         public List<OrderCommentDto> Comments { get; set; } = new List<OrderCommentDto>();
+        public List<WorkflowHistoryDto>? WorkflowHistory { get; set; }
         // დამატე თუ გინდა Comments, Documents DTO-ები მსგავსად
     }
 }

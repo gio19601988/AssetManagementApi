@@ -1,4 +1,5 @@
 // Services/OrderService.cs
+using AssetManagementApi.Controllers;
 using AssetManagementApi.Data;
 using AssetManagementApi.Dtos.Orders;
 using AssetManagementApi.Exceptions;
@@ -36,7 +37,7 @@ namespace AssetManagementApi.Services
                 .AsQueryable();
 
             if (statusCode != null)
-                query = query.Where(o => o.Status.Code == statusCode);
+                query = query.Where(o => o.Status != null && o.Status.Code == statusCode);
 
             if (requesterId != null)
                 query = query.Where(o => o.RequesterId == requesterId.Value);
@@ -93,14 +94,17 @@ namespace AssetManagementApi.Services
                 .Include(o => o.Status)
                 .Include(o => o.OrderType)
                 .Include(o => o.Items)
-                .Include(o => o.Documents)
-                .Include(o => o.Comments)
+                .Include(o => o.Documents)      // ← ეს აუცილებელია
+                .Include(o => o.Comments)       // ← ეს აუცილებელია
+                .Include(o => o.WorkflowHistories)  // ← თუ გაქვს WorkflowHistories navigation
+                .ThenInclude(w => w.FromStatus)     // ← optional, სახელებისთვის
+                                                    //.ThenInclude(w => w.ToStatus)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
             if (order == null)
                 throw new NotFoundException("შეკვეთა არ მოიძებნა");
 
-            // RBAC შემოწმება: თუ არა admin, მხოლოდ საკუთარი
+            // RBAC შემოწმება
             if (!await HasPermissionAsync("orders.view.all") && order.RequesterId != GetCurrentUserId())
                 throw new UnauthorizedAccessException("უფლება არ გაქვთ ამ შეკვეთის ნახვაზე");
 
@@ -159,7 +163,8 @@ namespace AssetManagementApi.Services
         // ────────────────────────────────────────────────────────────────
         public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto dto)
         {
-            var order = await _context.Orders.FindAsync(id) ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
+            var order = await _context.Orders.FindAsync(id)
+                ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
 
             var userId = GetCurrentUserId();
             if (!await HasPermissionAsync("orders.edit.all") && order.RequesterId != userId)
@@ -169,7 +174,11 @@ namespace AssetManagementApi.Services
             if (dto.Description != null) order.Description = dto.Description;
             if (dto.Priority != null) order.Priority = dto.Priority;
             if (dto.EstimatedAmount != null) order.EstimatedAmount = dto.EstimatedAmount;
-            if (dto.RequiredByDate != null) order.RequiredByDate = dto.RequiredByDate;
+            if (dto.Currency != null) order.Currency = dto.Currency;
+            if (dto.RequestedDate != null) order.RequestedDate = dto.RequestedDate.Value;
+            if (dto.RequiredByDate != null) order.RequiredByDate = dto.RequiredByDate.Value;
+            if (dto.DepartmentId != null) order.DepartmentId = dto.DepartmentId;
+            if (dto.OrderTypeId != null) order.OrderTypeId = dto.OrderTypeId.Value;
 
             order.UpdatedAt = DateTime.UtcNow;
 
@@ -200,7 +209,7 @@ namespace AssetManagementApi.Services
             var order = await _context.Orders.Include(o => o.Status).FirstOrDefaultAsync(o => o.Id == id) ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
 
             var permission = GetRequiredPermissionForStatus(newStatusCode);
-            if (!await HasPermissionAsync(permission))
+            if (!await HasPermissionAsync("Orders.approval"))
                 throw new UnauthorizedAccessException("უფლება არ გაქვთ სტატუსის ცვლილებაზე");
 
             var newStatusId = await GetStatusIdAsync(newStatusCode);
@@ -348,29 +357,40 @@ namespace AssetManagementApi.Services
         // ────────────────────────────────────────────────────────────────
         // დოკუმენტის ატვირთვა
         // ────────────────────────────────────────────────────────────────
-        public async Task<OrderDocumentDto> UploadDocumentAsync(int id, CreateOrderDocumentDto dto)
+        // 1. დოკუმენტის ატვირთვა
+        public async Task<OrderDocumentDto> UploadDocumentAsync(int orderId, IFormFile file, string? description)
         {
-            var order = await _context.Orders.FindAsync(id) ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
+            var order = await _context.Orders.FindAsync(orderId)
+                ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
 
-            // ფაილის შენახვა (wwwroot/files/orders/)
-            var filePath = Path.Combine("wwwroot/files/orders", Guid.NewGuid().ToString() + Path.GetExtension(dto.File.FileName));
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);  // საქაღალდის შექმნა თუ არ არსებობს
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await dto.File.CopyToAsync(stream);
-            }
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("ფაილი არ არის მითითებული");
 
             var userId = GetCurrentUserId();
 
+            // ფაილის შენახვა wwwroot/uploads/orders/{orderId}/
+            var uploadDir = Path.Combine("wwwroot", "uploads", "orders", orderId.ToString());
+            Directory.CreateDirectory(uploadDir);
+
+            var fileName = $"{Guid.NewGuid()}_{file.FileName}";
+            var filePath = Path.Combine(uploadDir, fileName);
+            var relativePath = $"/uploads/orders/{orderId}/{fileName}";
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
             var document = new OrderDocument
             {
-                OrderId = id,
-                FileName = dto.File.FileName,
-                FilePath = filePath.Replace("wwwroot", ""),  // relative path API-სთვის (მაგ. /files/orders/...)
-                FileSize = dto.File.Length,
-                FileType = dto.File.ContentType,
+                OrderId = orderId,
+                FileName = file.FileName,
+                FilePath = relativePath,
+                FileSize = file.Length,
+                FileType = file.ContentType,
                 UploadedBy = userId,
-                Description = dto.Description
+                UploadedAt = DateTime.UtcNow,
+                Description = description
             };
 
             _context.OrderDocuments.Add(document);
@@ -383,8 +403,7 @@ namespace AssetManagementApi.Services
                 FilePath = document.FilePath,
                 FileSize = document.FileSize,
                 FileType = document.FileType,
-                UploadedBy = document.UploadedBy,
-                UploadedByName = _context.AppUsers.Find(document.UploadedBy)?.FullName ?? string.Empty,
+                UploadedBy = userId,
                 UploadedAt = document.UploadedAt,
                 Description = document.Description
             };
@@ -408,7 +427,7 @@ namespace AssetManagementApi.Services
                     Quantity = oi.Quantity,
                     UnitPrice = oi.UnitPrice,
                     TotalPrice = oi.TotalPrice
-                    
+
                 })
                 .Take(50)  // ლიმიტი
                 .ToListAsync();
@@ -440,16 +459,20 @@ namespace AssetManagementApi.Services
         // ────────────────────────────────────────────────────────────────
         // დოკუმენტის განახლება (მაგ. description)
         // ────────────────────────────────────────────────────────────────
-        public async Task<OrderDocumentDto> UpdateDocumentAsync(int id, int docId, UpdateOrderDocumentDto dto)
+        public async Task<OrderDocumentDto> UpdateDocumentAsync(int orderId, int docId, UpdateDocumentDto dto)
         {
-            var document = await _context.OrderDocuments.FirstOrDefaultAsync(d => d.OrderId == id && d.Id == docId) ?? throw new NotFoundException("დოკუმენტი არ მოიძებნა");
+            var document = await _context.OrderDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == orderId && d.Id == docId)
+                ?? throw new NotFoundException("დოკუმენტი არ მოიძებნა");
 
             var userId = GetCurrentUserId();
             if (document.UploadedBy != userId && !await HasPermissionAsync("orders.edit.all"))
-                throw new UnauthorizedAccessException("უფლება არ გაქვთ დოკუმენტის განახლებაზე");
+                throw new UnauthorizedAccessException("უფლება არ გაქვთ");
 
             if (dto.Description != null) document.Description = dto.Description;
+            // თუ გინდა სახელის რედაქტირება — დაამატე FileName-იც
 
+            document.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return new OrderDocumentDto
@@ -460,7 +483,6 @@ namespace AssetManagementApi.Services
                 FileSize = document.FileSize,
                 FileType = document.FileType,
                 UploadedBy = document.UploadedBy,
-                UploadedByName = _context.AppUsers.Find(document.UploadedBy)?.FullName ?? string.Empty,
                 UploadedAt = document.UploadedAt,
                 Description = document.Description
             };
@@ -469,16 +491,18 @@ namespace AssetManagementApi.Services
         // ────────────────────────────────────────────────────────────────
         // დოკუმენტის წაშლა (ფაილის წაშლით)
         // ────────────────────────────────────────────────────────────────
-        public async Task DeleteDocumentAsync(int id, int docId)
+        // 2. დოკუმენტის წაშლა
+        public async Task DeleteDocumentAsync(int orderId, int documentId)
         {
-            var document = await _context.OrderDocuments.FirstOrDefaultAsync(d => d.OrderId == id && d.Id == docId) ?? throw new NotFoundException("დოკუმენტი არ მოიძებნა");
+            var document = await _context.OrderDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == orderId && d.Id == documentId)
+                ?? throw new NotFoundException("დოკუმენტი არ მოიძებნა");
 
             var userId = GetCurrentUserId();
             if (document.UploadedBy != userId && !await HasPermissionAsync("orders.delete"))
-                throw new UnauthorizedAccessException("უფლება არ გაქვთ დოკუმენტის წაშლაზე");
+                throw new UnauthorizedAccessException("უფლება არ გაქვთ");
 
-            // ფაილის წაშლა ფაილური სისტემიდან
-            var fullPath = "wwwroot" + document.FilePath;
+            var fullPath = Path.Combine("wwwroot", document.FilePath.TrimStart('/'));
             if (File.Exists(fullPath))
                 File.Delete(fullPath);
 
@@ -603,6 +627,7 @@ namespace AssetManagementApi.Services
                     UploadedAt = d.UploadedAt,
                     Description = d.Description
                 }).ToList() ?? new List<OrderDocumentDto>(),
+
                 Comments = order.Comments?.Select(c => new OrderCommentDto
                 {
                     Id = c.Id,
@@ -612,7 +637,16 @@ namespace AssetManagementApi.Services
                     IsInternal = c.IsInternal,
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt
-                }).ToList() ?? new List<OrderCommentDto>()
+                }).ToList() ?? new List<OrderCommentDto>(),
+
+                WorkflowHistory = order.WorkflowHistories?.Select(w => new WorkflowHistoryDto
+                {
+                    FromStatusNameKa = w.FromStatus?.NameKa,
+                    ToStatusNameKa = w.ToStatus?.NameKa ?? "უცნობი",
+                    ChangedByName = _context.AppUsers.Find(w.ChangedBy)?.FullName ?? "სისტემა",
+                    ChangedAt = w.ChangedAt,
+                    Comments = w.Comments
+                }).ToList() ?? new List<WorkflowHistoryDto>()
             };
         }
     }

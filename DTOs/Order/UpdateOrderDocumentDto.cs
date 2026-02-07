@@ -1,8 +1,11 @@
 // Dtos/Orders/UpdateOrderDocumentDto.cs
 namespace AssetManagementApi.Dtos.Orders
 {
-    public class UpdateOrderDocumentDto
+    public class UpdateDocumentDto
     {
-        public string? Description { get; set; }  // განახლებული აღწერა დოკუმენტისთვის
+        public string? Description { get; set; }
+        public string? Notes { get; set; }
+        
+
     }
 }

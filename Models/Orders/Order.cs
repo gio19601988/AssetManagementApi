@@ -47,7 +47,7 @@ namespace AssetManagementApi.Models.Orders;
 
         // Navigation
         public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
-        public ICollection<OrderWorkflow> WorkflowHistory { get; set; } = new List<OrderWorkflow>();
+        public ICollection<OrderWorkflow> WorkflowHistories { get; set; } = new List<OrderWorkflow>();
         public ICollection<OrderApproval> Approvals { get; set; } = new List<OrderApproval>();
         public ICollection<OrderDocument> Documents { get; set; } = new List<OrderDocument>();
         public ICollection<OrderComment> Comments { get; set; } = new List<OrderComment>();

@@ -5,7 +5,11 @@ using AssetManagementApi.Data;
 using AssetManagementApi.Dtos.Orders;
 using AssetManagementApi.Models.Orders;
 using AssetManagementApi.Models;
+using AssetManagementApi.Exceptions; // ← ეს აუცილებელია NotFoundException-ისთვის
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http; // IFormFile-ისთვის
+using System.IO;
+using AssetManagementApi.Services;  // ← ეს დაამატე ზემოთ, სადაც სხვა using-ებია
 
 namespace AssetManagementApi.Controllers;
 
@@ -15,15 +19,17 @@ namespace AssetManagementApi.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly OrderService _orderService;          // ← ეს დაამატე
     private readonly ILogger<OrdersController> _logger;
 
-    public OrdersController(ApplicationDbContext context, ILogger<OrdersController> logger)
+    public OrdersController(ApplicationDbContext context, OrderService orderService, ILogger<OrdersController> logger)
     {
         _context = context;
+        _orderService = orderService;
         _logger = logger;
     }
 
-    // ✅ GET: api/orders
+    // GET: api/orders
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetOrders(
         [FromQuery] string? status = null,
@@ -53,7 +59,7 @@ public class OrdersController : ControllerBase
                 StatusCode = o.Status != null ? o.Status.Code : "unknown",
                 StatusNameKa = o.Status != null ? o.Status.NameKa : "უცნობი",
                 o.RequesterId,
-                RequesterName = "მომხმარებელი", // TODO: join with AppUsers
+                RequesterName = "უცნობი მომხმარებელი",
                 o.DepartmentId,
                 o.EstimatedAmount,
                 o.Currency,
@@ -67,7 +73,7 @@ public class OrdersController : ControllerBase
         return Ok(orders);
     }
 
-    // ✅ GET: api/orders/{id}
+    // GET: api/orders/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<OrderDetailDto>> GetOrder(int id)
     {
@@ -75,70 +81,103 @@ public class OrdersController : ControllerBase
             .Include(o => o.Status)
             .Include(o => o.OrderType)
             .Include(o => o.Items)
-            .Where(o => o.Id == id)
-            .Select(o => new OrderDetailDto
-            {
-                Id = o.Id,
-                OrderNumber = o.OrderNumber,
-                
-                // Type
-                OrderTypeId = o.OrderTypeId,
-                OrderTypeName = o.OrderType != null ? o.OrderType.Name : null,
-                OrderTypeNameKa = o.OrderType != null ? o.OrderType.NameKa : null,
-                
-                // Status
-                StatusId = o.StatusId,
-                StatusCode = o.Status != null ? o.Status.Code : "unknown",
-                StatusName = o.Status != null ? o.Status.Name : "Unknown",
-                StatusNameKa = o.Status != null ? o.Status.NameKa : "უცნობი",
-                
-                // Basic
-                RequesterId = o.RequesterId,
-                RequesterName = "მომხმარებელი", // TODO: join with AppUsers
-                DepartmentId = o.DepartmentId,
-                DepartmentName = null, // TODO: join with Departments
-                
-                Title = o.Title,
-                Description = o.Description,
-                Priority = o.Priority,
-                
-                // Financial
-                EstimatedAmount = o.EstimatedAmount,
-                Currency = o.Currency,
-                
-                // Dates
-                RequestedDate = o.RequestedDate,
-                RequiredByDate = o.RequiredByDate,
-                ApprovedDate = o.ApprovedDate,
-                CompletedDate = o.CompletedDate,
-                CreatedAt = o.CreatedAt,
-                UpdatedAt = o.UpdatedAt,
-                
-                // Items
-                Items = o.Items.Select(i => new OrderItemDto
-                {
-                    Id = i.Id,
-                    OrderId = i.OrderId,
-                    AssetId = i.AssetId,
-                    ItemName = i.ItemName,
-                    ItemDescription = i.ItemDescription,
-                    CategoryId = i.CategoryId,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice,
-                    TotalPrice = i.TotalPrice,
-                    Notes = i.Notes,
-                    CreatedAt = i.CreatedAt
-                }).ToList()
-            })
-            .FirstOrDefaultAsync();
+            .Include(o => o.Documents)
+            .Include(o => o.Comments)
+            .Include(o => o.WorkflowHistories)
+                .ThenInclude(w => w.FromStatus)  // მხოლოდ FromStatus, ToStatus-ის პრობლემა მოგვარებულია
+            .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
             return NotFound(new { message = "შეკვეთა არ მოიძებნა" });
 
-        return Ok(order);
+        // Requester-ის და Department-ის მონაცემები ცალკე query-ით (სწრაფი და სუფთა)
+        var requester = await _context.AppUsers.FindAsync(order.RequesterId);
+        var department = order.DepartmentId.HasValue
+            ? await _context.Departments.FindAsync(order.DepartmentId.Value)
+            : null;
+
+        var dto = new OrderDetailDto
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            OrderTypeId = order.OrderTypeId,
+            OrderTypeName = order.OrderType?.Name,
+            OrderTypeNameKa = order.OrderType?.NameKa,
+            StatusId = order.StatusId,
+            StatusCode = order.Status?.Code ?? "unknown",
+            StatusName = order.Status?.Name ?? "Unknown",
+            StatusNameKa = order.Status?.NameKa ?? "უცნობი",
+            RequesterId = order.RequesterId,
+            RequesterName = requester?.Username ?? requester?.FullName ?? "უცნობი მომხმარებელი", // ← Username დამატებულია
+            DepartmentId = order.DepartmentId,
+            DepartmentName = department?.Name ?? null,
+            Title = order.Title,
+            Description = order.Description,
+            Priority = order.Priority,
+            EstimatedAmount = order.EstimatedAmount,
+            Currency = order.Currency,
+            RequestedDate = order.RequestedDate,
+            RequiredByDate = order.RequiredByDate,
+            ApprovedDate = order.ApprovedDate,
+            CompletedDate = order.CompletedDate,
+            CreatedAt = order.CreatedAt,
+            UpdatedAt = order.UpdatedAt,
+
+            // სრული Items fields (ყველა შესაძლო ველი)
+            Items = order.Items.Select(i => new OrderItemDto
+            {
+                Id = i.Id,
+                OrderId = i.OrderId,
+                AssetId = i.AssetId,
+                ItemName = i.ItemName,
+                ItemDescription = i.ItemDescription,
+                CategoryId = i.CategoryId,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                TotalPrice = i.TotalPrice,
+                Notes = i.Notes,
+                CreatedAt = i.CreatedAt
+            }).ToList(),
+
+            // Documents
+            Documents = order.Documents.Select(d => new OrderDocumentDto
+            {
+                Id = d.Id,
+                FileName = d.FileName,
+                FilePath = d.FilePath,
+                FileSize = d.FileSize,
+                FileType = d.FileType,
+                UploadedBy = d.UploadedBy,
+                UploadedAt = d.UploadedAt,
+                Description = d.Description
+            }).ToList(),
+
+            // Comments
+            Comments = order.Comments.Select(c => new OrderCommentDto
+            {
+                Id = c.Id,
+                UserId = c.UserId,
+                Comment = c.Comment,
+                IsInternal = c.IsInternal,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt
+            }).ToList(),
+
+            // Workflow History
+            WorkflowHistory = order.WorkflowHistories.Select(w => new WorkflowHistoryDto
+            {
+                FromStatusNameKa = w.FromStatus?.NameKa,
+                ToStatusNameKa = w.ToStatus?.NameKa ?? "უცნობი",
+                ChangedByName = "სისტემა", // TODO: join AppUsers თუ გჭირდება
+                ChangedAt = w.ChangedAt,
+                Comments = w.Comments
+            }).ToList()
+        };
+
+        return Ok(dto);
     }
 
-    // ✅ POST: api/orders
+    // POST: api/orders
     [HttpPost]
     public async Task<ActionResult> CreateOrder([FromBody] CreateOrderDto dto)
     {
@@ -146,19 +185,19 @@ public class OrdersController : ControllerBase
         {
             _logger.LogInformation("Creating order: {@Order}", dto);
 
-            // ვამოწმებთ OrderType-ს
+            // OrderType შემოწმება
             var orderType = await _context.Set<OrderType>()
                 .FirstOrDefaultAsync(ot => ot.Id == dto.OrderTypeId);
-            
+
             if (orderType == null)
                 return BadRequest(new { message = "არასწორი შეკვეთის ტიპი" });
 
-            // ვამოწმებთ Department-ს
+            // Department შემოწმება
             if (dto.DepartmentId.HasValue)
             {
                 var deptExists = await _context.Departments
                     .AnyAsync(d => d.Id == dto.DepartmentId.Value);
-                
+
                 if (!deptExists)
                     return BadRequest(new { message = "არასწორი დეპარტამენტი" });
             }
@@ -171,7 +210,7 @@ public class OrdersController : ControllerBase
             // Default Status - "pending"
             var pendingStatus = await _context.Set<OrderStatus>()
                 .FirstOrDefaultAsync(s => s.Code == "pending");
-            
+
             if (pendingStatus == null)
                 return BadRequest(new { message = "სტატუსი 'pending' არ არსებობს. შექმენით პირველ რიგში." });
 
@@ -205,8 +244,8 @@ public class OrdersController : ControllerBase
                     ItemName = itemDto.ItemName,
                     Quantity = itemDto.Quantity,
                     UnitPrice = itemDto.UnitPrice,
-                    TotalPrice = itemDto.UnitPrice.HasValue 
-                        ? itemDto.UnitPrice.Value * itemDto.Quantity 
+                    TotalPrice = itemDto.UnitPrice.HasValue
+                        ? itemDto.UnitPrice.Value * itemDto.Quantity
                         : null,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -231,7 +270,7 @@ public class OrdersController : ControllerBase
         }
     }
 
-    // ✅ GET: api/orders/order-types
+    // GET: api/orders/order-types
     [HttpGet("order-types")]
     public async Task<ActionResult> GetOrderTypes()
     {
@@ -243,7 +282,7 @@ public class OrdersController : ControllerBase
         return Ok(types);
     }
 
-    // ✅ GET: api/orders/order-statuses
+    // GET: api/orders/order-statuses
     [HttpGet("order-statuses")]
     public async Task<ActionResult> GetOrderStatuses()
     {
@@ -255,7 +294,37 @@ public class OrdersController : ControllerBase
         return Ok(statuses);
     }
 
-    // ✅ GET: api/orders/items/search?q=...
+    [HttpPost("{id}/{status}")]
+    public async Task<ActionResult<OrderDto>> ChangeStatus(int id, string status, [FromBody] ChangeStatusDto? dto = null)
+    {
+        try
+        {
+            var updated = await _orderService.ChangeStatusAsync(id, status, dto?.Comments);
+            return Ok(updated);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing order status");
+            return BadRequest(new { message = "სტატუსის შეცვლა ვერ მოხერხდა: " + ex.Message });
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<OrderDto>> UpdateOrder(int id, [FromBody] UpdateOrderDto dto)
+    {
+        var order = await _orderService.UpdateOrderAsync(id, dto);
+        return Ok(order);
+    }
+
+    // GET: api/orders/items/search?q=...
     [HttpGet("items/search")]
     public async Task<ActionResult> SearchOrderItems([FromQuery] string q)
     {
@@ -283,7 +352,140 @@ public class OrdersController : ControllerBase
         return Ok(items);
     }
 
-    // ✅ Helper: შეკვეთის ნომრის გენერაცია
+    // POST: api/orders/{id}/documents
+    [HttpPost("{id}/documents")]
+    public async Task<ActionResult<OrderDocumentDto>> UploadDocument(int id, IFormFile file, [FromForm] string? description)
+    {
+        try
+        {
+            var order = await _context.Orders.FindAsync(id) ?? throw new NotFoundException("შეკვეთა არ მოიძებნა");
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "ფაილი არ არის მითითებული" });
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+            var uploadDir = Path.Combine("wwwroot", "uploads", "orders", id.ToString());
+            Directory.CreateDirectory(uploadDir);
+
+            var fileName = $"{Guid.NewGuid()}_{file.FileName}";
+            var filePath = Path.Combine(uploadDir, fileName);
+            var relativePath = $"/uploads/orders/{id}/{fileName}";
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var document = new OrderDocument
+            {
+                OrderId = id,
+                FileName = file.FileName,
+                FilePath = relativePath,
+                FileSize = file.Length,
+                FileType = file.ContentType,
+                UploadedBy = userId,
+                UploadedAt = DateTime.UtcNow,
+                Description = description
+            };
+
+            _context.OrderDocuments.Add(document);
+            await _context.SaveChangesAsync();
+
+            var dto = new OrderDocumentDto
+            {
+                Id = document.Id,
+                FileName = document.FileName,
+                FilePath = document.FilePath,
+                FileSize = document.FileSize,
+                FileType = document.FileType,
+                UploadedBy = userId,
+                UploadedAt = document.UploadedAt,
+                Description = document.Description
+            };
+
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading document");
+            return BadRequest(new { message = "ფაილის ატვირთვა ვერ მოხერხდა: " + ex.Message });
+        }
+    }
+
+    // DELETE: api/orders/{id}/documents/{docId}
+    [HttpDelete("{id}/documents/{docId}")]
+    public async Task<IActionResult> DeleteDocument(int id, int docId)
+    {
+        var document = await _context.OrderDocuments
+            .FirstOrDefaultAsync(d => d.OrderId == id && d.Id == docId);
+
+        if (document == null)
+            return NotFound(new { message = "დოკუმენტი არ მოიძებნა" });
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+        if (document.UploadedBy != userId)
+            return NotFound("დოკუმენტის წაშლა არ შეიძლება: უფლება არ გაქვთ");
+
+        var fullPath = Path.Combine("wwwroot", document.FilePath.TrimStart('/'));
+        if (System.IO.File.Exists(fullPath))
+            System.IO.File.Delete(fullPath);
+
+        _context.OrderDocuments.Remove(document);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+    [HttpPut("{id}/documents/{docId}")]
+    public async Task<ActionResult<OrderDocumentDto>> UpdateDocument(int id, int docId, [FromBody] UpdateDocumentDto dto)
+    {
+        var updated = await _orderService.UpdateDocumentAsync(id, docId, dto);
+        return Ok(updated);
+    }
+
+
+
+
+    // POST: api/orders/{id}/comments
+    [HttpPost("{id}/comments")]
+    public async Task<IActionResult> AddComment(int id, [FromBody] AddCommentDto dto)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null)
+            return NotFound(new { message = "შეკვეთა არ მოიძებნა" });
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+        var comment = new OrderComment
+        {
+            OrderId = id,
+            UserId = userId,
+            Comment = dto.Comment,
+            IsInternal = dto.IsInternal,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.OrderComments.Add(comment);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    public class AddCommentDto
+    {
+        public string Comment { get; set; } = string.Empty;
+        public bool IsInternal { get; set; }
+    }
+
+    // Helper: შეკვეთის ნომრის გენერაცია (შენი ორიგინალური)
     private async Task<string> GenerateOrderNumber()
     {
         var prefix = "ORD";
