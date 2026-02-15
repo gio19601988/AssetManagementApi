@@ -25,6 +25,7 @@ namespace AssetManagementApi.Dtos.Orders
         public DateTime? RequiredByDate { get; set; }
 
         public int? DepartmentId { get; set; }
+        public bool NotifyApprovers { get; set; } = false;  // ← ახალი
 
         // Items (ახალი შეკვეთისთვის list)
         public List<CreateOrderItemDto> Items { get; set; } = new List<CreateOrderItemDto>();

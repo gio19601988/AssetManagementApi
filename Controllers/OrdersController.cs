@@ -255,7 +255,33 @@ public class OrdersController : ControllerBase
             _context.Orders.Add(newOrder);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Order created successfully: {OrderNumber}", orderNumber);
+            bool emailSent = false;
+            string emailMessage = "";
+
+            if (dto.NotifyApprovers)
+            {
+                try
+                {
+                    await _orderService.SendNewOrderNotification(newOrder);
+                    emailSent = true;
+                    emailMessage = "შეტყობინება გაეგზავნა დამამტკიცებლებს";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Email notification failed");
+                    emailSent = false;
+                    emailMessage = "შეტყობინების გაგზავნა ვერ მოხერხდა";
+                }
+            }
+
+            var response = new CreateOrderResponseDto
+            {
+                Id = newOrder.Id,
+                OrderNumber = newOrder.OrderNumber,
+                EmailSent = emailSent,
+                EmailMessage = emailMessage
+            };
+
 
             return CreatedAtAction(
                 nameof(GetOrder),
@@ -323,6 +349,47 @@ public class OrdersController : ControllerBase
         var order = await _orderService.UpdateOrderAsync(id, dto);
         return Ok(order);
     }
+
+    // DELETE: api/orders/{id}
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteOrder(int id)
+    {
+        try
+        {
+            var order = await _context.Orders
+                .Include(o => o.Items)
+                .Include(o => o.Documents)
+                .Include(o => o.Comments)
+                .Include(o => o.WorkflowHistories)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null)
+                return NotFound(new { message = "შეკვეთა არ მოიძებნა" });
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+            // უფლების შემოწმება (მაგალითად: მხოლოდ ადმინი ან შემქმნელი)
+            if (order.RequesterId != userId && !User.IsInRole("Admin"))
+                return Forbid("უფლება არ გაქვთ ამ შეკვეთის წაშლაზე");
+
+            // ყველა დაკავშირებული ჩანაწერის წაშლა (EF Core cascade delete-ით უნდა იმუშაოს)
+            _context.Orders.Remove(order);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Order deleted: ID={Id}, Number={OrderNumber}", id, order.OrderNumber);
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting order ID={Id}", id);
+            return BadRequest(new { message = "შეკვეთის წაშლა ვერ მოხერხდა: " + ex.Message });
+        }
+    }
+
+
 
     // GET: api/orders/items/search?q=...
     [HttpGet("items/search")]
@@ -485,6 +552,54 @@ public class OrdersController : ControllerBase
         public bool IsInternal { get; set; }
     }
 
+    [HttpDelete("{id}/comments/{commentId}")]
+    public async Task<IActionResult> DeleteComment(int id, int commentId)
+    {
+        var comment = await _context.OrderComments
+            .FirstOrDefaultAsync(c => c.OrderId == id && c.Id == commentId);
+
+        if (comment == null)
+            return NotFound(new { message = "კომენტარი არ მოიძებნა" });
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+        // უფლების შემოწმება (მაგალითად: მხოლოდ ავტორი ან ადმინი)
+        if (comment.UserId != userId)
+            return Forbid("უფლება არ გაქვთ ამ კომენტარის წაშლაზე");
+
+        _context.OrderComments.Remove(comment);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPut("{id}/comments/{commentId}")]
+    public async Task<IActionResult> UpdateComment(int id, int commentId, [FromBody] UpdateCommentDto dto)
+    {
+        var comment = await _context.OrderComments
+            .FirstOrDefaultAsync(c => c.OrderId == id && c.Id == commentId);
+
+        if (comment == null)
+            return NotFound(new { message = "კომენტარი არ მოიძებნა" });
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+        if (comment.UserId != userId)
+            return Forbid("უფლება არ გაქვთ ამ კომენტარის რედაქტირებაზე");
+
+        if (dto.Comment != null) comment.Comment = dto.Comment;
+        comment.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+
     // Helper: შეკვეთის ნომრის გენერაცია (შენი ორიგინალური)
     private async Task<string> GenerateOrderNumber()
     {
@@ -508,5 +623,38 @@ public class OrdersController : ControllerBase
         }
 
         return $"{prefix}-{year}{month:D2}{nextNumber:D4}";
+    }
+
+    private async Task SendNewOrderNotification(Order order)
+    {
+        // TODO: Implement notification logic (email, SMS, etc.)
+        await Task.CompletedTask;
+    }
+
+    [HttpPost("{id}/notify-approvers")]
+    public async Task<IActionResult> NotifyApprovers(int id)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null)
+            return NotFound(new { message = "შეკვეთა არ მოიძებნა" });
+
+        // უფლების შემოწმება (მაგ. შემქმნელი ან ადმინი)
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized(new { message = "მომხმარებელი ვერ დადგინდა" });
+
+        if (order.RequesterId != userId && !User.IsInRole("Admin"))
+            return Forbid("უფლება არ გაქვთ შეტყობინების გაგზავნაზე");
+
+        try
+        {
+            await _orderService.SendNewOrderNotification(order);
+            return Ok(new { message = "შეტყობინება წარმატებით გაიგზავნა" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resend notification for order {Id}", id);
+            return StatusCode(500, new { message = "შეტყობინების გაგზავნა ვერ მოხერხდა" });
+        }
     }
 }

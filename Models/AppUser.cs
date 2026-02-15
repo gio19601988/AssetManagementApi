@@ -24,4 +24,9 @@ public class AppUser
     [Required]  // <--- მთავარი ცვლილება!
     [StringLength(255)]
     public string PasswordHash { get; set; } = string.Empty;  // არა nullable!
+    // ახალი ველი — ელ.ფოსტა
+    [Required]
+    [EmailAddress]
+    [StringLength(255)]
+    public string Email { get; set; } = string.Empty;  // ← ეს დაამატე
 }

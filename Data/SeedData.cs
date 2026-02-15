@@ -64,7 +64,8 @@ namespace AssetManagementApi.Data
                 new OrderStatus { Code = "approved", Name = "Approved", NameKa = "დამტკიცებული", Color = "#4CAF50", OrderSeq = 3 },
                 new OrderStatus { Code = "completed", Name = "Completed", NameKa = "დასრულებული", Color = "#9E9E9E", OrderSeq = 4 },
                 new OrderStatus { Code = "cancelled", Name = "Cancelled", NameKa = "გაუქმებული", Color = "#F44336", OrderSeq = 5 },
-                new OrderStatus { Code = "rejected", Name = "Rejected", NameKa = "უარყოფილი", Color = "#FF5722", OrderSeq = 6 }
+                new OrderStatus { Code = "rejected", Name = "Rejected", NameKa = "უარყოფილი", Color = "#FF5722", OrderSeq = 6 },
+                new OrderStatus { Code = "archived", Name = "Archived", NameKa = "არქივირებული", Color = "#757575", OrderSeq = 7 }
             };
             context.OrderStatuses.AddRange(statuses);
             context.SaveChanges();

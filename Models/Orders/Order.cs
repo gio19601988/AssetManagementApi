@@ -51,4 +51,4 @@ namespace AssetManagementApi.Models.Orders;
         public ICollection<OrderApproval> Approvals { get; set; } = new List<OrderApproval>();
         public ICollection<OrderDocument> Documents { get; set; } = new List<OrderDocument>();
         public ICollection<OrderComment> Comments { get; set; } = new List<OrderComment>();
-    }
+}

@@ -5,8 +5,12 @@ using AssetManagementApi.Dtos.Orders;
 using AssetManagementApi.Exceptions;
 using AssetManagementApi.Models.Orders;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Security.Claims;  // User ID-ისთვის JWT-დან
+using MailKit.Net.Smtp;
+using MimeKit;
+using MailKit.Security;  // SecureSocketOptions-ისთვის
 
 namespace AssetManagementApi.Services
 {
@@ -14,11 +18,13 @@ namespace AssetManagementApi.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;  // მიმდინარე მომხმარებლის ინფოსთვის
+        private readonly ILogger<OrderService> _logger;
 
-        public OrderService(ApplicationDbContext context, IHttpContextAccessor httpContextAccessor)
+        public OrderService(ApplicationDbContext context, IHttpContextAccessor httpContextAccessor, ILogger<OrderService> logger)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
+            _logger = logger;
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -546,16 +552,18 @@ namespace AssetManagementApi.Services
         private bool IsValidTransition(string fromCode, string toCode)
         {
             var allowed = new Dictionary<string, List<string>>
-            {
-                {"pending", new List<string> {"review", "cancelled"}},
-                {"review", new List<string> {"approved", "rejected", "pending"}},
-                {"approved", new List<string> {"completed", "cancelled"}},
-                {"completed", new List<string> {}},
-                {"cancelled", new List<string> {}},
-                {"rejected", new List<string> {"pending"}}
-            };
+    {
+        {"pending", new List<string> {"review", "cancelled", "archived"}},
+        {"review", new List<string> {"approved", "rejected", "pending", "archived"}},
+        {"approved", new List<string> {"completed", "cancelled", "archived"}},
+        {"completed", new List<string> {"archived"}},          // ← დასრულებულიდან შეიძლება არქივი
+        {"cancelled", new List<string> {"archived"}},         // ← გაუქმებულიდან შეიძლება არქივი
+        {"rejected", new List<string> {"pending", "archived"}},
+        {"archived", new List<string> {}}                     // არქივირებულიდან არსად
+    };
 
-            return allowed.TryGetValue(fromCode, out var transitions) && transitions?.Contains(toCode) == true;
+            return allowed.TryGetValue(fromCode.ToLower(), out var transitions)
+                && transitions?.Contains(toCode.ToLower()) == true;
         }
 
         private string GetRequiredPermissionForStatus(string statusCode)
@@ -566,7 +574,10 @@ namespace AssetManagementApi.Services
                 {"approved", "orders.approve"},
                 {"rejected", "orders.approve"},
                 {"completed", "orders.complete"},
-                {"cancelled", "orders.cancel"}
+                {"cancelled", "orders.cancel"},
+                {"archived", "orders.archive"},
+                {"pending", "orders.edit.all"},
+                {"default", "orders.edit.all"}
             };
 
             return permissions.GetValueOrDefault(statusCode, "orders.edit.all");
@@ -648,6 +659,80 @@ namespace AssetManagementApi.Services
                     Comments = w.Comments
                 }).ToList() ?? new List<WorkflowHistoryDto>()
             };
+        }
+
+        public async Task SendNewOrderNotification(Order order)
+        {
+            // იპოვე დამამტკიცებლები (მაგ. Role = "approver")
+            var approvers = await (from u in _context.AppUsers
+                                   join ur in _context.UserRoles on u.Id equals ur.UserId
+                                   join r in _context.Roles on ur.RoleId equals r.Id
+                                   where r.Name.ToLower() == "approver"
+                                   select u.Email)
+                               .Distinct()
+                               .ToListAsync();
+
+            if (!approvers.Any())
+            {
+                _logger.LogWarning("No approvers found for order #{OrderNumber}. No email sent.", order.OrderNumber);
+                return;
+            }
+            _logger.LogInformation("Preparing to send notification for order #{OrderNumber} to {Count} approvers: {Emails}",
+                order.OrderNumber, approvers.Count, string.Join(", ", approvers));
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("Asset Management System", "giorobaqidze88@gmail.com"));
+
+            foreach (var email in approvers)
+            {
+                message.To.Add(new MailboxAddress("", email));
+                _logger.LogDebug("Added recipient: {Email}", email);
+            }
+
+            message.Subject = $"ახალი შეკვეთა შეიქმნა: #{order.OrderNumber}";
+
+            var builder = new BodyBuilder
+            {
+                TextBody = $"""
+            გამარჯობა,
+
+            ახალი შეკვეთა შეიქმნა:
+            შეკვეთის №: {order.OrderNumber}
+            სათაური: {order.Title}
+            მოთხოვნა: {order.RequesterId} (სრული სახელი თუ გაქვს)
+            თარიღი: {order.RequestedDate:dd.MM.yyyy}
+
+            გადადით ლინკზე დეტალების სანახავად:
+            http://localhost:5173/orders/{order.Id}
+
+            მადლობა!
+            """
+            };
+
+            message.Body = builder.ToMessageBody();
+
+            try
+            {
+                _logger.LogInformation("Connecting to SMTP server...");
+                using var client = new SmtpClient();
+                await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
+                _logger.LogInformation("Connected to SMTP. Authenticating...");
+
+                // შენი მონაცემები
+                await client.AuthenticateAsync("giorobaqidze88@gmail.com", "hldu utqx hkcf asbh");
+                _logger.LogInformation("Authenticated successfully. Sending email...");
+
+                await client.SendAsync(message);
+                _logger.LogInformation("Email successfully sent to {Count} recipients for order #{OrderNumber}", approvers.Count, order.OrderNumber);
+                await client.DisconnectAsync(true);
+
+                _logger.LogInformation("Email notification sent to {Count} approvers for order #{OrderNumber}", approvers.Count, order.OrderNumber);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send email for order #{OrderNumber}. Error: {Message}", order.OrderNumber, ex.Message);
+                throw; // ← ეს გადავცემთ კონტროლერს, რომ frontend-მა დაინახოს error
+            }
         }
     }
 }

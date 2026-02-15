@@ -17,7 +17,7 @@ namespace AssetManagementApi.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.23")
+                .HasAnnotation("ProductVersion", "8.0.24")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -36,6 +36,11 @@ namespace AssetManagementApi.Migrations
                         .HasDefaultValueSql("GETDATE()");
 
                     b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
@@ -1538,7 +1543,7 @@ namespace AssetManagementApi.Migrations
                         .HasForeignKey("FromStatusId");
 
                     b.HasOne("AssetManagementApi.Models.Orders.Order", "Order")
-                        .WithMany("WorkflowHistory")
+                        .WithMany("WorkflowHistories")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1708,7 +1713,7 @@ namespace AssetManagementApi.Migrations
 
                     b.Navigation("Items");
 
-                    b.Navigation("WorkflowHistory");
+                    b.Navigation("WorkflowHistories");
                 });
 
             modelBuilder.Entity("AssetManagementApi.Models.Permission", b =>
